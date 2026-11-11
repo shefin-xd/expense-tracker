@@ -1,0 +1,59 @@
+@import '@fontsource-variable/inter';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Palette: black #090B10, white #FFFFFF, dark blue #142B52 + neutral grays. Space-separated RGB for alpha support. */
+:root {
+  --bg: 255 255 255;
+  --surface: 255 255 255;
+  --subtle: 246 247 249;
+  --fg: 9 11 16;
+  --muted: 92 99 112;
+  --faint: 139 146 158;
+  --line: 229 231 236;
+  --strong: 205 209 217;
+  --primary: 20 43 82;
+  --primary-hover: 14 32 63;
+  --primary-fg: 255 255 255;
+  --accent: 20 43 82;
+  --danger: 176 42 42;
+  --warn: 150 98 10;
+  --good: 28 110 70;
+  color-scheme: light;
+}
+.dark {
+  --bg: 9 11 16;
+  --surface: 15 18 25;
+  --subtle: 21 25 34;
+  --fg: 241 243 247;
+  --muted: 160 167 180;
+  --faint: 117 124 138;
+  --line: 36 41 52;
+  --strong: 55 62 77;
+  --primary: 32 62 114;
+  --primary-hover: 42 77 138;
+  --primary-fg: 255 255 255;
+  --accent: 138 170 226;
+  --danger: 240 128 128;
+  --warn: 226 176 92;
+  --good: 120 205 160;
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body {
+  @apply bg-bg text-fg font-sans antialiased;
+  font-feature-settings: 'cv11', 'ss03';
+  -webkit-tap-highlight-color: transparent;
+}
+.num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; }
+input[type='date'], input[type='month'] { min-height: 40px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+@keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+.anim-fade { animation: fade 120ms ease-out; }
+.anim-rise { animation: rise 160ms ease-out; }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }

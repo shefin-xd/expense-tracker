@@ -1,7 +1,7 @@
 # CampusLedger
 
 Minimal multi-user expense tracker for college students (MERN + TypeScript).
-Phase 1 (foundation) and Phase 2 (API modules) live in `server/`. Phases 3-5: reports/exports, React client, deployment docs.
+The API (auth, ledger, CRUD modules, reports/exports) lives in `server/`; the React app lives in `client/`. Phase 5 (deployment docs) is still to come.
 
 ## Run the server
 ```
@@ -61,3 +61,18 @@ All four endpoints take the same query and only ever read the logged-in user's d
 ## Tests
 `npm test` runs against a real MongoDB replica set (`mongodb-memory-server`). If it cannot download MongoDB, point it
 at an installed binary: `MONGOMS_SYSTEM_BINARY=/path/to/mongod MONGOMS_VERSION=<its version> npm test`.
+
+## Run the client
+```
+cd client
+npm install
+npm run dev          # http://localhost:5173 — /api is proxied to http://localhost:4000, so cookies just work
+npm test             # utilities + jsdom smoke tests for every page
+npm run build        # type-checks, then builds to client/dist
+```
+Production: set `VITE_API_URL` (e.g. `https://api.shefin.dev/api`) at build time. `vercel.json` provides the SPA fallback.
+The server must have `CLIENT_URL` set to the exact frontend origin (CORS with credentials).
+
+### Client structure
+`src/lib` (API client, money, IST dates) · `src/components/ui` (design-system parts) · `src/layouts` · `src/features/<area>` (api hooks, forms, page) · `src/store` (theme, quick-add, toasts).
+Amounts are typed as text and sent to the API as exact rupee strings; they are never parsed to floats. Every date is an Asia/Kolkata calendar day.
