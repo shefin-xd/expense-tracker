@@ -7,7 +7,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 const cookieOptions = (): CookieOptions => ({
   httpOnly: true,
   secure: isProd,
-  sameSite: 'lax',
+  sameSite: isProd ? 'none' : 'lax',
   domain: env.COOKIE_DOMAIN,
   path: '/',
 });
