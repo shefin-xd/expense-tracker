@@ -1,0 +1,24 @@
+import { Router } from 'express';
+import { authRouter } from './auth.routes';
+import { budgetRouter } from './budget.routes';
+import { expenseRouter } from './expense.routes';
+import { feeRouter } from './fee.routes';
+import { incomeRouter } from './income.routes';
+import { makeLoanRouter } from './loan.routes';
+import { categoryRouter, dashboardRouter, notificationRouter, transactionRouter, userRouter } from './misc.routes';
+import { savingsRouter } from './savings.routes';
+
+export const apiRouter = Router();
+apiRouter.use('/auth', authRouter);
+apiRouter.use('/users', userRouter);
+apiRouter.use('/dashboard', dashboardRouter);
+apiRouter.use('/categories', categoryRouter);
+apiRouter.use('/expenses', expenseRouter);
+apiRouter.use('/income', incomeRouter);
+apiRouter.use('/transactions', transactionRouter);
+apiRouter.use('/fees', feeRouter);
+apiRouter.use('/lending', makeLoanRouter('lent'));
+apiRouter.use('/borrowing', makeLoanRouter('borrowed'));
+apiRouter.use('/budgets', budgetRouter);
+apiRouter.use('/savings', savingsRouter);
+apiRouter.use('/notifications', notificationRouter);
