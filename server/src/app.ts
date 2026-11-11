@@ -3,7 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
-import { env, isProd } from './config/env';
+import { env, isProd, clientOrigins } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { apiRouter } from './routes';
 
@@ -13,7 +13,15 @@ export function createApp() {
   app.disable('x-powered-by');
 
   app.use(helmet());
-  app.use(cors({ origin: env.CLIENT_URL, credentials: true, exposedHeaders: ['Content-Disposition'] }));
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin || clientOrigins.includes(origin)) return callback(null, true);
+      if (clientOrigins.length === 0) return callback(null, true);
+      return callback(new Error(`CORS origin not allowed: ${origin}`));
+    },
+    credentials: true,
+    exposedHeaders: ['Content-Disposition'],
+  }));
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
 

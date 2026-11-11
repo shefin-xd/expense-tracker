@@ -13,7 +13,10 @@ const cookieOptions = (): CookieOptions => ({
 });
 
 function startSession(res: Response, userId: string) {
-  res.cookie(COOKIE_NAME, signToken(userId), { ...cookieOptions(), maxAge: 7 * 24 * 60 * 60 * 1000 });
+  res.cookie(COOKIE_NAME, signToken(userId), {
+    ...cookieOptions(),
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
 }
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
