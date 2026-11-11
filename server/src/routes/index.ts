@@ -6,6 +6,7 @@ import { feeRouter } from './fee.routes';
 import { incomeRouter } from './income.routes';
 import { makeLoanRouter } from './loan.routes';
 import { categoryRouter, dashboardRouter, notificationRouter, transactionRouter, userRouter } from './misc.routes';
+import { reportRouter } from './report.routes';
 import { savingsRouter } from './savings.routes';
 
 export const apiRouter = Router();
@@ -22,3 +23,4 @@ apiRouter.use('/borrowing', makeLoanRouter('borrowed'));
 apiRouter.use('/budgets', budgetRouter);
 apiRouter.use('/savings', savingsRouter);
 apiRouter.use('/notifications', notificationRouter);
+apiRouter.use('/reports', reportRouter);

@@ -33,4 +33,31 @@ borrow + (liability, not income), borrow repayment -. Savings goals are tracked 
 | Budgets | GET/PUT budgets/:month (YYYY-MM or "current"); GET budgets/:month/compare |
 | Savings | GET/POST savings; PATCH/DELETE savings/:id |
 | Notifications | GET notifications; POST notifications/read-all, :id/read; DELETE :id |
+| Reports | GET reports/summary, reports/pdf, reports/xlsx, reports/csv (see below) |
 | Health | GET health |
+
+## Reports and exports
+All four endpoints take the same query and only ever read the logged-in user's data.
+
+| Query | Meaning |
+|---|---|
+| `month=2026-10` | Monthly report (IST month). Default: the current month |
+| `year=2026` | Yearly report |
+| `from=2026-10-01&to=2026-10-15` | Custom range, inclusive of the whole last day (IST). Max 5 years |
+| `scope=all\|expenses\|income\|fees` | Full report, or expense-only, income-only, fee report |
+| `section=...` (csv only) | `transactions` (default), `summary`, `income`, `expenses`, `fees`, `fee_payments`, `lent`, `borrowed`, `budgets`, `savings`, `categories` |
+
+- **PDF**: opening balance, income, expenses, remaining balance, category breakdown, transaction history, upcoming
+  payments and savings summary. The Inter font is embedded from `server/assets/fonts` (the built-in PDF fonts have no
+  ₹ sign), so deploy that folder with the server. Very long histories are capped at 2,000 rows in the PDF.
+- **XLSX**: sheets Dashboard Summary, Income, Expenses, Fees and Payments, Borrowed Money, Lent Money, Budgets and
+  Savings (narrower scopes produce fewer sheets). Real numeric and date cells, ₹ number format, header filters and
+  SUBTOTAL totals that follow the filter.
+- **CSV**: UTF-8 with BOM, amounts as plain rupees (`1250.50`), ISO dates. Text that starts with `= + - @` is
+  prefixed with `'` so spreadsheet apps cannot run it as a formula.
+- Opening balance is everything before the range, remaining balance is everything up to its end, and both come from
+  the ledger, so they always match the dashboard. Each successful download adds an in-app "Export ready" notification.
+
+## Tests
+`npm test` runs against a real MongoDB replica set (`mongodb-memory-server`). If it cannot download MongoDB, point it
+at an installed binary: `MONGOMS_SYSTEM_BINARY=/path/to/mongod MONGOMS_VERSION=<its version> npm test`.
