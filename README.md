@@ -21,7 +21,7 @@ npm run dev               # http://localhost:5173 (Vite proxies /api to the API,
 npm test                  # unit + screen tests
 npm run build             # type-check and production build into dist/
 ```
-Password-reset emails need SMTP settings (see `server/.env.example`); without them the reset link is printed in the server console during development.
+Password-reset emails are sent through Mailtrap's HTTP API (set `MAILTRAP_API_TOKEN`, see `server/.env.example`); without it the reset link is printed in the server console during development.
 Production: set `VITE_API_URL` (client) to the public API URL, and `CLIENT_URL` + `COOKIE_DOMAIN` (server) so the cookie works across the two subdomains.
 
 ## How money works

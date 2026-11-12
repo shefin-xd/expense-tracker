@@ -8,10 +8,10 @@ const schema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   CLIENT_URL: z.string().url(),
-  SMTP_HOST: z.string().optional().transform((v) => (v ? v : undefined)),
-  SMTP_PORT: z.coerce.number().int().positive().default(587),
-  SMTP_USER: z.string().optional().transform((v) => (v ? v : undefined)),
-  SMTP_PASS: z.string().optional().transform((v) => (v ? v : undefined)),
+  // Email goes through Mailtrap's HTTP API (works on hosts that block SMTP ports, such as Render's free plan).
+  MAILTRAP_API_TOKEN: z.string().optional().transform((v) => (v ? v : undefined)),
+  // Set only to send into a Mailtrap *testing inbox* (nothing reaches real inboxes). Leave empty for live sending.
+  MAILTRAP_INBOX_ID: z.string().regex(/^\d+$/, 'MAILTRAP_INBOX_ID must be the numeric inbox id').optional().or(z.literal('')).transform((v) => (v ? v : undefined)),
   EMAIL_FROM: z.string().default('CampusLedger <no-reply@localhost>'),
   COOKIE_DOMAIN: z.string().optional().transform((v) => (v ? v : undefined)),
 });

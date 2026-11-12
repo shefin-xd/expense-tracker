@@ -1,5 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": false, "rootDir": "src", "outDir": "dist" },
-  "include": ["src"]
+  "include": [],
+  "files": ["src/server.ts", "src/types/express.d.ts"]
 }

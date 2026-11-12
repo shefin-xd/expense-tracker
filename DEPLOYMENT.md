@@ -8,7 +8,7 @@ Browser ──► https://expenses.shefin.dev   (React app, Vercel)
 
 Both hostnames share the registrable domain `shefin.dev`, so the sign-in cookie (`Domain=.shefin.dev`, `HttpOnly`, `Secure`, `SameSite=Lax`) is sent to the API without any third-party-cookie problems.
 
-You need free accounts at GitHub, MongoDB Atlas, Render and Vercel, access to the DNS settings for `shefin.dev`, and an email (SMTP) provider for password-reset emails.
+You need free accounts at GitHub, MongoDB Atlas, Render and Vercel, access to the DNS settings for `shefin.dev`, and a Mailtrap account for password-reset emails.
 
 ## 1. Put the code on GitHub
 Push the whole folder (it has `client/` and `server/`) to one private repository. `.env` files are git-ignored. Never commit secrets.
@@ -25,7 +25,7 @@ Push the whole folder (it has `client/` and `server/`) to one private repository
 1. Render Dashboard → **New → Blueprint** → choose your repository. Render reads `render.yaml`.
 2. When asked, fill in the values that are not stored in the file:
    - `MONGODB_URI`: the string from step 2.
-   - `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`: from your email provider (see section 6).
+   - `MAILTRAP_API_TOKEN`: from Mailtrap (see section 6).
    `JWT_SECRET` is generated for you. `CLIENT_URL` (`https://expenses.shefin.dev`) and `COOKIE_DOMAIN` (`.shefin.dev`, with the leading dot) are already set.
 3. Wait for the first deploy, then open `https://<your-service>.onrender.com/api/health`. You should see `{"success":true,"data":{"status":"ok",...}}`.
 4. Service → **Settings → Custom Domains → Add** `api.shefin.dev`. Render shows the DNS target (your `<service>.onrender.com` address). Add the DNS record in section 5, then press **Verify**. Render issues the HTTPS certificate automatically.
@@ -54,10 +54,18 @@ Notes:
 - On Cloudflare, set both records to **DNS only** (grey cloud) so Vercel and Render can issue certificates.
 - Changes usually appear within minutes but can take longer. Check with `dig +short CNAME expenses.shefin.dev` and `dig +short CNAME api.shefin.dev`. Vercel and Render show a green "valid" or "verified" status when they see the record.
 
-## 6. Email for password resets
-Any SMTP service works (Brevo, Resend, Mailgun, a Gmail app password, and so on). Create a sender or domain there, then set on Render: `SMTP_HOST`, `SMTP_PORT` (587 normally, 465 for implicit TLS), `SMTP_USER`, `SMTP_PASS`, and `EMAIL_FROM` (an address your provider has verified, such as `CampusLedger <no-reply@shefin.dev>`). Add the SPF/DKIM records your provider gives you so messages do not land in spam.
+## 6. Email for password resets (Mailtrap)
+CampusLedger sends email through Mailtrap's HTTP API, not SMTP. This matters on Render: free web services block outbound SMTP ports (25, 465, 587), so an SMTP setup would silently fail there, while an HTTPS call works.
 
-If `SMTP_HOST` is empty in production the server logs a warning and sends nothing. For privacy, "forgot password" still answers the same way either way, so test it once after deploying.
+**Live sending (real students receive the email)**
+1. In Mailtrap, open **Sending Domains**, add `shefin.dev`, and add the DNS records Mailtrap shows (SPF, DKIM and so on) at your DNS provider. Wait until the domain shows as verified.
+2. Create an **API token** with sending permission for that domain (Settings → API Tokens).
+3. On Render set `MAILTRAP_API_TOKEN` to that token and `EMAIL_FROM` to an address on the verified domain, for example `CampusLedger <no-reply@shefin.dev>`. Leave `MAILTRAP_INBOX_ID` unset.
+
+**Testing only (nothing is delivered)**
+Set `MAILTRAP_INBOX_ID` to your Mailtrap testing inbox's number as well. Reset emails then land in that inbox, where you can open and inspect them, and are never delivered to real people. Remove the variable before you invite friends.
+
+The server prints one line at startup telling you which mode is active (`Mailtrap live sending`, `Mailtrap TESTING inbox`, or `NOT configured`); look for it in the Render logs. If no token is set in production, no email is sent. The "forgot password" screen still answers the same way for privacy, so test it once after deploying.
 
 ## 7. Create your account
 Either register in the app, or create the owner profile from your own computer without writing the password anywhere permanent:
@@ -87,7 +95,16 @@ The free tiers of Atlas, Render and Vercel are enough to start, but check each p
 | Refreshing `/expenses` shows a 404 | `client/vercel.json` was not deployed, or the Vercel root directory is not `client` |
 | API fails to start with "Invalid production configuration" | `CLIENT_URL` is not https, `JWT_SECRET` is a placeholder, or `COOKIE_DOMAIN` has no leading dot |
 | "Transaction numbers are only allowed on a replica set" | The database is not an Atlas cluster or a replica set |
-| Reset email never arrives | SMTP variables missing or the sender is not verified; check the Render logs |
+| Reset email never arrives | `MAILTRAP_API_TOKEN` missing, `MAILTRAP_INBOX_ID` still set (testing mode), or `EMAIL_FROM` is not on a verified Mailtrap domain; the Render logs show the Mailtrap error |
+| Render build fails with errors in `src/services/report.*.ts` | Old files from another version are still in `server/src/services`; see below |
 | First request is slow | The free Render service was asleep |
 
 Rotating `JWT_SECRET` signs everyone out, which is the right response if you ever suspect it leaked.
+
+## If the Render build fails with TypeScript errors in `src/services/report.*.ts`
+The files in this project that build reports are `server/src/services/report.service.ts`, `server/src/exports/csv.ts`, `server/src/exports/pdf.ts` and `server/src/exports/xlsx.ts`. Errors that mention `report.pdf.ts`, `report.tables.ts`, `report.xlsx.ts`, `report.csv.ts`, `ReportData` or `istDateAsUtc` come from leftover files of a different version. Delete the stale ones from the repository, then push:
+```
+cd server/src/services
+git rm report.csv.ts report.pdf.ts report.tables.ts report.xlsx.ts
+```
+The build compiles every file under `server/src`, so one stale file is enough to fail the deploy. To check before pushing, run `cd server && npm ci --include=dev && npm run build` locally; it must finish with no output.

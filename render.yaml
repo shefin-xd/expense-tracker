@@ -24,13 +24,9 @@ services:
         value: https://expenses.shefin.dev
       - key: COOKIE_DOMAIN
         value: .shefin.dev
-      - key: EMAIL_FROM
+      - key: EMAIL_FROM              # must be an address on a domain verified in Mailtrap
         value: CampusLedger <no-reply@shefin.dev>
-      - key: SMTP_HOST               # password-reset emails; see DEPLOYMENT.md
+      - key: MAILTRAP_API_TOKEN      # Mailtrap > Settings > API Tokens (password-reset emails)
         sync: false
-      - key: SMTP_PORT
-        value: "587"
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
+      # - key: MAILTRAP_INBOX_ID     # only for testing: sends into a Mailtrap inbox instead of real delivery
+      #   sync: false
