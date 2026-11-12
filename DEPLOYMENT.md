@@ -96,15 +96,18 @@ The free tiers of Atlas, Render and Vercel are enough to start, but check each p
 | API fails to start with "Invalid production configuration" | `CLIENT_URL` is not https, `JWT_SECRET` is a placeholder, or `COOKIE_DOMAIN` has no leading dot |
 | "Transaction numbers are only allowed on a replica set" | The database is not an Atlas cluster or a replica set |
 | Reset email never arrives | `MAILTRAP_API_TOKEN` missing, `MAILTRAP_INBOX_ID` still set (testing mode), or `EMAIL_FROM` is not on a verified Mailtrap domain; the Render logs show the Mailtrap error |
-| Render build fails with errors in `src/services/report.*.ts` | Old files from another version are still in `server/src/services`; see below |
+| Build fails with TypeScript errors in files that are not part of this project (`report.*.ts`, `feedback.tsx`, `features/*/…Page.tsx`) | Leftover files from another version are still in the repository; see the last section |
 | First request is slow | The free Render service was asleep |
 
 Rotating `JWT_SECRET` signs everyone out, which is the right response if you ever suspect it leaked.
 
-## If the Render build fails with TypeScript errors in `src/services/report.*.ts`
-The files in this project that build reports are `server/src/services/report.service.ts`, `server/src/exports/csv.ts`, `server/src/exports/pdf.ts` and `server/src/exports/xlsx.ts`. Errors that mention `report.pdf.ts`, `report.tables.ts`, `report.xlsx.ts`, `report.csv.ts`, `ReportData` or `istDateAsUtc` come from leftover files of a different version. Delete the stale ones from the repository, then push:
+## If a build fails with TypeScript errors in files you do not recognise
+Errors such as `report.pdf.ts`, `report.tables.ts`, `ReportData`, `istDateAsUtc` (API) or `components/ui/feedback.tsx`, `useToasts`, `ConfirmDialog` exported from `ui/Modal`, `features/expenses/ExpensesPage.tsx` (app) come from leftover files of a different version that were committed next to this one. In this project the pages are in `client/src/pages/`, the report exporters are in `server/src/exports/`, and the confirm dialog is `client/src/components/ui/Confirm.tsx`.
+
+Find them with the script in this project (run from your repository root; works on Windows, macOS and Linux):
 ```
-cd server/src/services
-git rm report.csv.ts report.pdf.ts report.tables.ts report.xlsx.ts
+node scripts/find-stale-files.mjs
 ```
-The build compiles every file under `server/src`, so one stale file is enough to fail the deploy. To check before pushing, run `cd server && npm ci --include=dev && npm run build` locally; it must finish with no output.
+It lists every committed file under `client/src` and `server/src` that is not part of this project, and prints the `git rm ...` command to remove them; it also lists any of this project's files that are missing from your repository. Remove the stale files, commit and push. If the list is long, the simplest fix is to delete your `client/` and `server/` folders and extract the ones from the zip.
+
+Both builds now type-check only the files that are actually imported (`server/tsconfig.build.json`, `client/tsconfig.build.json`), so a stray unused file can no longer fail a deploy by itself. It still cannot help if a stale file is imported by the code that runs, which is why cleaning them out matters. `npm run typecheck` in each folder checks every file, including tests.
