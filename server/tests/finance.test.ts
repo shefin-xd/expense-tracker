@@ -260,6 +260,20 @@ describe('budgets, savings, notifications, dashboard', () => {
     expect(d.recentTransactions.length).toBe(2);
   });
 
+  it('category breakdown includes fee payments so it matches the spending chart', async () => {
+    const { agent } = await signup();
+    await expense(agent, 300, 'Food', { date: new Date().toISOString() });
+    const fee = await agent.post('/api/fees').send({ title: 'Lab fee', category: 'lab', academicYear: '2026-27', total: 800, dueDate: iso(5) });
+    await agent.post(`/api/fees/${fee.body.data.id}/payments`).send({ amount: 500, date: new Date().toISOString() });
+    const d = (await agent.get('/api/dashboard')).body.data;
+    expect(d.categoryBreakdown).toEqual([
+      { category: 'Fees', totalPaise: 50_000, count: 1 },
+      { category: 'Food', totalPaise: 30_000, count: 1 },
+    ]);
+    const chartTotal = d.spendingSeries.reduce((s: number, p: { totalPaise: number }) => s + p.totalPaise, 0);
+    expect(d.categoryBreakdown.reduce((s: number, c: { totalPaise: number }) => s + c.totalPaise, 0)).toBe(chartTotal);
+  });
+
   it('transactions page filters by type and searches titles', async () => {
     const { agent } = await signup();
     await income(agent, 100);

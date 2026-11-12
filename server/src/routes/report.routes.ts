@@ -1,69 +1,38 @@
 import { randomUUID } from 'node:crypto';
-import { Router, type Response } from 'express';
+import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+import { reportToCsv } from '../exports/csv';
+import { reportToPdf } from '../exports/pdf';
+import { reportToXlsx } from '../exports/xlsx';
 import { requireAuth } from '../middleware/auth';
 import { queryOf, validateQuery } from '../middleware/validate';
 import { notify } from '../services/notification.service';
-import { buildPdf } from '../services/report.pdf';
-import { buildReport, resolveRange, type ReportData } from '../services/report.service';
-import { tableToCsv } from '../services/report.csv';
-import { buildTables } from '../services/report.tables';
-import { buildWorkbook } from '../services/report.xlsx';
-import { User } from '../models/User';
-import type { DateFormat } from '../utils/dates';
+import { buildReport } from '../services/report.service';
 import { asyncHandler } from '../utils/asyncHandler';
-import { ok } from '../utils/http';
-import { csvQuerySchema, reportQuerySchema } from '../validators/report.validators';
+import { reportQuerySchema } from '../validators/report.validators';
 
-export const reportRouter = Router().use(requireAuth);
+export const reportRouter = Router();
+reportRouter.use(requireAuth);
+reportRouter.use(rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false, skip: () => process.env.NODE_ENV === 'test' }));
 
-type Q = { scope: ReportData['meta']['scope']; month?: string | undefined; year?: number | undefined; from?: Date | undefined; to?: Date | undefined };
+const FORMATS = {
+  pdf: { mime: 'application/pdf', ext: 'pdf' },
+  xlsx: { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx' },
+  csv: { mime: 'text/csv; charset=utf-8', ext: 'csv' },
+} as const;
 
-async function load(userId: string, q: Q): Promise<ReportData> {
-  const user = await User.findById(userId).select('preferences.dateFormat').lean();
-  const fmt = (user?.preferences?.dateFormat as DateFormat | undefined) ?? 'DD/MM/YYYY';
-  return buildReport(userId, q.scope, resolveRange(q, new Date(), fmt));
+for (const format of ['pdf', 'xlsx', 'csv'] as const) {
+  reportRouter.get(`/${format}`, validateQuery(reportQuerySchema), asyncHandler(async (req, res) => {
+    const q = queryOf(res, reportQuerySchema);
+    const userId = req.userId!;
+    // Every query inside buildReport is scoped to this user.
+    const report = await buildReport(userId, q);
+    // CSV is a single table; pick the dataset that fits the report unless asked.
+    const dataset = q.dataset ?? ({ expenses: 'expenses', income: 'income', fees: 'fees' } as const)[report.type as 'expenses' | 'income' | 'fees'] ?? 'transactions';
+    const body = format === 'pdf' ? await reportToPdf(report) : format === 'xlsx' ? await reportToXlsx(report) : Buffer.from(reportToCsv(report, dataset), 'utf8');
+    const name = `campusledger-${report.type}-${report.label}${format === 'csv' ? `-${dataset}` : ''}.${FORMATS[format].ext}`;
+
+    await notify(userId, { type: 'export_ready', title: 'Export ready', message: `Your ${report.title.toLowerCase()} (${format.toUpperCase()}) for ${report.label} was generated.`, dedupeKey: `export:${randomUUID()}` });
+    res.status(200).set({ 'Content-Type': FORMATS[format].mime, 'Content-Length': String(body.length), 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'private, no-store' }).end(body);
+  }));
 }
-
-const slug = (s: string) => s.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-async function send(res: Response, userId: string, d: ReportData, format: 'pdf' | 'xlsx' | 'csv', body: Buffer | string, mime: string, suffix = '') {
-  // Tell the user once the file really exists; a failed notification must never fail the download.
-  await notify(userId, {
-    type: 'export_ready', title: 'Export ready',
-    message: `Your ${format.toUpperCase()} report for ${d.meta.label} was generated.`.slice(0, 400),
-    dedupeKey: `export:${format}:${randomUUID()}`,
-  }).catch(() => undefined);
-  res.setHeader('Content-Type', mime);
-  res.setHeader('Cache-Control', 'no-store');
-  res.attachment(`CampusLedger_${slug(d.meta.label)}_${d.meta.scope}${suffix}.${format}`);
-  res.send(body);
-}
-
-/** JSON preview for the Reports page: totals, categories and upcoming items, without the row-level data. */
-reportRouter.get('/summary', validateQuery(reportQuerySchema), asyncHandler(async (req, res) => {
-  const d = await load(req.userId!, queryOf(res, reportQuerySchema));
-  const { transactions: _t, income: _i, expenses: _e, ...rest } = d;
-  ok(res, rest);
-}));
-
-reportRouter.get('/pdf', validateQuery(reportQuerySchema), asyncHandler(async (req, res) => {
-  const d = await load(req.userId!, queryOf(res, reportQuerySchema));
-  await send(res, req.userId!, d, 'pdf', await buildPdf(d), 'application/pdf');
-}));
-
-reportRouter.get('/xlsx', validateQuery(reportQuerySchema), asyncHandler(async (req, res) => {
-  const d = await load(req.userId!, queryOf(res, reportQuerySchema));
-  await send(res, req.userId!, d, 'xlsx', await buildWorkbook(d), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-}));
-
-reportRouter.get('/csv', validateQuery(csvQuerySchema), asyncHandler(async (req, res) => {
-  const q = queryOf(res, csvQuerySchema);
-  // The section decides which data has to be loaded; only the transaction list honours ?scope=.
-  const byScope: Record<typeof q.section, Q['scope'] | null> = {
-    income: 'income', expenses: 'expenses', categories: 'expenses', fees: 'fees', fee_payments: 'fees',
-    lent: 'all', borrowed: 'all', budgets: 'all', savings: 'all', transactions: null, summary: null,
-  };
-  const d = await load(req.userId!, { ...q, scope: byScope[q.section] ?? q.scope });
-  const table = buildTables(d)[q.section];
-  await send(res, req.userId!, d, 'csv', tableToCsv(table), 'text/csv; charset=utf-8', `_${q.section}`);
-}));

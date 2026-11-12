@@ -1,19 +1,14 @@
 import clsx from 'clsx';
 import { Loader2 } from 'lucide-react';
-import type { ButtonHTMLAttributes } from 'react';
+import type { ComponentProps } from 'react';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
-interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: Variant;
-  size?: 'sm' | 'md';
-  loading?: boolean;
-}
+type Props = ComponentProps<'button'> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'sm' | 'md'; loading?: boolean };
 
-const variants: Record<Variant, string> = {
-  primary: 'bg-primary text-primary-fg hover:bg-primary-hover dark:border dark:border-strong',
-  secondary: 'border border-strong bg-surface text-fg hover:bg-subtle',
-  ghost: 'text-muted hover:bg-subtle hover:text-fg',
-  danger: 'border border-danger/40 text-danger hover:bg-danger/10',
+const variants = {
+  primary: 'bg-primary text-primary-fg hover:opacity-90 border border-transparent',
+  secondary: 'bg-bg text-text border border-border-strong hover:bg-surface',
+  ghost: 'bg-transparent text-text border border-transparent hover:bg-surface',
+  danger: 'bg-danger text-white border border-transparent hover:opacity-90',
 };
 
 export function Button({ variant = 'primary', size = 'md', loading, disabled, className, children, type = 'button', ...rest }: Props) {
@@ -21,30 +16,23 @@ export function Button({ variant = 'primary', size = 'md', loading, disabled, cl
     <button
       type={type}
       disabled={disabled || loading}
-      aria-busy={loading || undefined}
       className={clsx(
-        'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded font-medium transition-colors disabled:pointer-events-none disabled:opacity-50',
-        size === 'md' ? 'h-10 px-4 text-sm' : 'h-8 px-3 text-[13px]',
+        'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        size === 'sm' ? 'h-8 px-3 text-[13px]' : 'h-10 px-4 text-sm',
         variants[variant],
         className,
       )}
       {...rest}
     >
-      {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+      {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
       {children}
     </button>
   );
 }
 
-export function IconButton({ label, className, children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+export function IconButton({ label, className, children, ...rest }: ComponentProps<'button'> & { label: string }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      className={clsx('inline-flex h-9 w-9 items-center justify-center rounded text-muted transition-colors hover:bg-subtle hover:text-fg', className)}
-      {...rest}
-    >
+    <button type="button" aria-label={label} title={label} className={clsx('inline-flex size-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface hover:text-text', className)} {...rest}>
       {children}
     </button>
   );

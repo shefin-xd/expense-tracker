@@ -1,329 +1,209 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import ExcelJS from 'exceljs';
-import { Notification } from '../src/models/Notification';
-import { CSV_SECTIONS } from '../src/validators/report.validators';
-import { anonymous, clearDb, signup, startDb, stopDb, type Agent } from './helpers';
+import rawPdfParse from 'pdf-parse/lib/pdf-parse.js';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { anonymous, balance, clearDb, iso, signup, startDb, stopDb, type Agent } from './helpers';
 
 beforeAll(startDb);
 afterAll(stopDb);
 beforeEach(clearDb);
 
-const binary = (res: NodeJS.ReadableStream, cb: (err: Error | null, body: Buffer) => void) => {
-  const chunks: Buffer[] = [];
-  res.on('data', (c: Buffer) => chunks.push(c));
-  res.on('end', () => cb(null, Buffer.concat(chunks)));
-};
-const getBin = (a: Agent, url: string) => a.get(url).buffer(true).parse(binary as never);
-const loadWb = async (buf: unknown) => {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buf as ExcelJS.Buffer);
-  return wb;
+// pdf-parse 1.1.1 (an old pdf.js build) rejects the very first file it opens in a process with
+// "bad XRef entry"; the same bytes parse fine on retry (and pass qpdf/pypdf checks).
+const pdfParse = async (buf: Buffer) => {
+  try { return await rawPdfParse(buf); } catch { return rawPdfParse(buf); }
 };
 
-/** Same shape of data for every user; `tag` makes each user's records recognisable. */
-async function seed(a: Agent, tag: string, opts: { hostile?: boolean } = {}) {
-  const post = async (url: string, body: object) => {
-    const r = await a.post(url).send(body);
-    expect(r.status, `${url} ${JSON.stringify(r.body)}`).toBeLessThan(300);
-    return r.body.data;
-  };
-  await post('/api/income', { source: 'pocket_money', amount: 2000, date: '2026-09-10T10:00:00Z', description: `${tag}-sept` });
-  await post('/api/income', { source: 'parents', amount: 10000, date: '2026-10-05T10:00:00Z', description: `${tag}-allowance` });
-  await post('/api/expenses', { title: `${tag}-lunch`, amount: '250.50', category: 'Food', date: '2026-10-10T07:00:00Z' });
-  if (opts.hostile) await post('/api/expenses', { title: '=HYPERLINK("http://evil.example","x")', amount: 10, category: 'Snacks', date: '2026-10-11T07:00:00Z' });
-  // 2026-10-31 20:00 UTC is 1 Nov, 01:30 in IST, so it belongs to November.
-  await post('/api/expenses', { title: `${tag}-boundary`, amount: 100, category: 'Food', date: '2026-10-31T20:00:00Z' });
-  const fee = await post('/api/fees', { title: `${tag}-tuition`, category: 'tuition', academicYear: '2026-27', total: 5000, dueDate: '2026-10-20T00:00:00Z' });
-  await post(`/api/fees/${fee.id}/payments`, { amount: 1200, date: '2026-10-15T10:00:00Z', referenceNo: `${tag}-REF` });
-  await post('/api/lending', { person: `${tag}-Anu`, amount: 300, date: '2026-10-12T10:00:00Z' });
-  await post('/api/borrowing', { person: `${tag}-Ben`, amount: 200, date: '2026-10-13T10:00:00Z' });
-  expect((await a.put('/api/budgets/2026-10').send({ overall: 1000, categories: [{ category: 'Food', limit: 500 }] })).status).toBe(200);
-  await post('/api/savings', { name: `${tag}-Laptop`, target: 60000, saved: 15000 });
+const SHEETS = ['Dashboard Summary', 'Income', 'Expenses', 'Fees and Payments', 'Borrowed Money', 'Lent Money', 'Budgets and Savings'];
+
+async function download(agent: Agent | ReturnType<typeof anonymous>, url: string) {
+  const res = await agent.get(url).buffer(true).parse((r, cb) => {
+    const chunks: Buffer[] = [];
+    r.on('data', (c: Buffer) => chunks.push(c));
+    r.on('end', () => cb(null, Buffer.concat(chunks)));
+  });
+  return { status: res.status, headers: res.headers, body: res.body as Buffer };
 }
+const xlsxOf = async (buf: Buffer) => { const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf as unknown as ArrayBuffer); return wb; };
+const allText = (wb: ExcelJS.Workbook) => { const out: string[] = []; wb.eachSheet((ws) => ws.eachRow((row) => row.eachCell((c) => out.push(String(typeof c.value === 'object' && c.value && 'result' in c.value ? c.value.result : c.value))))); return out.join('\n'); };
+const nowIso = () => new Date().toISOString();
 
-const OCT = 'month=2026-10';
+/** Alice: prior-month income, then this month's income, expense, fee payment, loan, budget, savings. */
+async function seedAlice(agent: Agent) {
+  await agent.post('/api/income').send({ source: 'parents', amount: 10000, date: iso(-45), description: 'Old allowance' });
+  await agent.post('/api/income').send({ source: 'pocket_money', amount: 2000, date: nowIso() });
+  await agent.post('/api/expenses').send({ title: 'Biriyani Zeta', amount: '250.50', category: 'Food', date: nowIso(), paymentMethod: 'upi' });
+  const fee = await agent.post('/api/fees').send({ title: 'Semester fee', category: 'tuition', academicYear: '2026-27', total: 5000, dueDate: iso(20) });
+  await agent.post(`/api/fees/${fee.body.data.id}/payments`).send({ amount: 1200, referenceNo: 'REF-ALICE-1' });
+  await agent.post('/api/lending').send({ person: 'Arjun Lent', amount: 500, date: nowIso(), expectedDate: iso(10) });
+  await agent.post('/api/borrowing').send({ person: 'Nikhil Owed', amount: 300, date: nowIso() });
+  await agent.put('/api/budgets/current').send({ overall: 5000, categories: [{ category: 'Food', limit: 1000 }] });
+  await agent.post('/api/savings').send({ name: 'Laptop Fund', target: 60000, saved: 15000 });
+}
+const ALICE_SECRETS = ['Biriyani Zeta', 'Semester fee', 'REF-ALICE-1', 'Arjun Lent', 'Nikhil Owed', 'Laptop Fund', 'Old allowance', 'Test alice'];
 
-describe('report numbers', () => {
-  it('opening, income, expenses and closing balance follow the ledger rules (IST month)', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A', { hostile: true });
-    const res = await agent.get(`/api/reports/summary?${OCT}`);
+describe('XLSX export', () => {
+  it('has the seven worksheets, correct totals, INR/date formats and filters', async () => {
+    const { agent } = await signup('alice');
+    await seedAlice(agent);
+    const res = await download(agent, '/api/reports/xlsx?type=monthly&month=' + new Date().toISOString().slice(0, 7));
     expect(res.status).toBe(200);
-    const s = res.body.data.summary;
-    expect(s.openingPaise).toBe(200_000); // September pocket money only
-    expect(s.incomePaise).toBe(1_000_000);
-    expect(s.feePaymentsPaise).toBe(120_000); // only what was actually paid, not the ₹5,000 fee
-    expect(s.expensesPaise).toBe(25_050 + 1_000 + 120_000); // boundary expense is November, so excluded
-    expect(s.closingPaise).toBe(200_000 + 1_000_000 - 146_050 - 30_000 + 20_000); // lend out −, borrow in +
-    expect(s.netPaise).toBe(s.closingPaise - s.openingPaise);
-    expect(s.lentOutstandingPaise).toBe(30_000);
-    expect(s.borrowedOutstandingPaise).toBe(20_000);
-    expect(s.savingsPaise).toBe(1_500_000);
-    // Independent check: the same balance straight from the ledger, as of the last instant of October in IST.
-    const asOf = await agent.get('/api/transactions/summary?to=2026-10-31T18:29:59.999Z');
-    expect(asOf.body.data.balancePaise).toBe(s.closingPaise);
-    // The borrowed money is not income.
-    expect(s.incomePaise).toBe(1_000_000);
+    expect(res.headers['content-type']).toContain('spreadsheetml');
+    expect(res.headers['content-disposition']).toMatch(/attachment; filename="campusledger-monthly-.*\.xlsx"/);
+    const wb = await xlsxOf(res.body);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(SHEETS);
+
+    // Summary numbers: opening 10,000; income 2,000; expenses 250.50 + 1,200 fee payment.
+    const summary = wb.getWorksheet('Dashboard Summary')!;
+    const val = (label: string) => { let v: unknown; summary.eachRow((r) => { if (r.getCell(1).value === label) v = r.getCell(2).value; }); return v; };
+    expect(val('Opening balance')).toBe(10000);
+    expect(val('Total income')).toBe(2000);
+    expect(val('Total expenses')).toBe(1450.5);
+    expect(val('Remaining balance')).toBe(10349.5);
+    expect(val('Friends owe you')).toBe(500);
+    expect(val('You owe friends')).toBe(300);
+    expect(val('Remaining balance')).toBe((await balance(agent)) / 100);
+
+    const exp = wb.getWorksheet('Expenses')!;
+    expect(exp.getRow(2).getCell(2).value).toBe('Biriyani Zeta');
+    expect(exp.getRow(2).getCell(7).value).toBe(250.5);
+    expect(exp.getRow(2).getCell(7).numFmt).toContain('₹');
+    expect(exp.getRow(2).getCell(1).numFmt).toBe('dd/mm/yyyy');
+    expect(exp.autoFilter).toBeTruthy();
+    expect(exp.getRow(3).getCell(7).value).toMatchObject({ formula: 'SUM(G2:G2)', result: 250.5 });
+
+    const fees = allText(wb.getWorksheet('Fees and Payments')!.workbook);
+    expect(fees).toContain('Semester fee');
+    expect(fees).toContain('REF-ALICE-1');
+    expect(allText(wb)).toContain('Laptop Fund');
   });
 
-  it('puts the 1 Nov 01:30 IST expense in November and the category totals add up to the expenses', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    const nov = (await agent.get('/api/reports/summary?month=2026-11')).body.data;
-    expect(nov.summary.expensesPaise).toBe(10_000);
-    expect(nov.summary.openingPaise).toBe(200_000 + 1_000_000 - 25_050 - 120_000 - 30_000 + 20_000);
-    const oct = (await agent.get(`/api/reports/summary?${OCT}`)).body.data;
-    expect(oct.categories.reduce((n: number, c: { totalPaise: number }) => n + c.totalPaise, 0)).toBe(oct.summary.expensesPaise);
-    expect(oct.categories.map((c: { category: string }) => c.category)).toContain('Fee payments');
-  });
-
-  it('supports yearly and custom ranges, and a custom "to" date includes the whole last day', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    const year = (await agent.get('/api/reports/summary?year=2026')).body.data;
-    expect(year.summary.incomePaise).toBe(1_200_000);
-    expect(year.meta.period).toBe('year');
-    const day = (await agent.get('/api/reports/summary?from=2026-10-10&to=2026-10-10')).body.data;
-    expect(day.meta.period).toBe('custom');
-    expect(day.summary.expensesPaise).toBe(25_050);
-  });
-
-  it('scopes narrow what is reported', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    const inc = (await agent.get(`/api/reports/summary?${OCT}&scope=income`)).body.data;
-    expect(inc.categories).toEqual([]);
-    expect(inc.incomeBySource).toHaveLength(1);
-    const fees = (await agent.get(`/api/reports/summary?${OCT}&scope=fees`)).body.data;
-    expect(fees.fees).toHaveLength(1);
-    expect(fees.feePayments).toHaveLength(1);
-    expect(fees.savings).toEqual([]);
-  });
-
-  it('shows an unpaid fee as upcoming, never as an expense', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    const d = (await agent.get(`/api/reports/summary?${OCT}`)).body.data;
-    expect(d.upcoming.fees).toHaveLength(1);
-    expect(d.upcoming.fees[0]).toMatchObject({ totalPaise: 500_000, paidPaise: 120_000, remainingPaise: 380_000 });
-    expect(d.summary.expensesPaise).toBeLessThan(500_000);
+  it('never executes user text as a formula', async () => {
+    const { agent } = await signup('alice');
+    await agent.post('/api/expenses').send({ title: '=HYPERLINK("http://evil","x")', amount: 5, category: 'Food', date: nowIso() });
+    const wb = await xlsxOf((await download(agent, '/api/reports/xlsx')).body);
+    const cell = wb.getWorksheet('Expenses')!.getRow(2).getCell(2);
+    expect(typeof cell.value).toBe('string');
+    expect(String(cell.value).startsWith("'=")).toBe(true);
   });
 });
 
 describe('CSV export', () => {
-  it('every section downloads as UTF-8 CSV with an attachment filename', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    for (const section of CSV_SECTIONS) {
-      const res = await getBin(agent, `/api/reports/csv?${OCT}&section=${section}`);
-      expect(res.status, section).toBe(200);
-      expect(res.headers['content-type']).toContain('text/csv');
-      expect(res.headers['content-disposition']).toMatch(/attachment; filename="?CampusLedger_October-2026_\w+_\w+\.csv"?/);
-      expect(res.headers['cache-control']).toBe('no-store');
-      expect((res.body as Buffer).toString('utf8').startsWith('\uFEFF')).toBe(true);
-    }
+  it('exports transactions with a BOM, escaping and signed columns', async () => {
+    const { agent } = await signup('alice');
+    await agent.post('/api/income').send({ source: 'parents', amount: 100, date: nowIso() });
+    await agent.post('/api/expenses').send({ title: 'Tea, "special"', amount: 12.5, category: 'Snacks', date: nowIso() });
+    await agent.post('/api/expenses').send({ title: '=cmd|calc', amount: 1, category: 'Food', date: nowIso() });
+    const res = await download(agent, '/api/reports/csv');
+    expect(res.headers['content-type']).toContain('text/csv');
+    const text = res.body.toString('utf8');
+    expect(text.charCodeAt(0)).toBe(0xfeff);
+    expect(text).toContain('Date,Type,Title,Category,Money In (INR),Money Out (INR)');
+    expect(text).toContain('"Tea, ""special"""');
+    expect(text).toContain("'=cmd|calc");
+    expect(text).toMatch(/Money from parents,.*,100\.00,/);
+    expect(text).toMatch(/,12\.50\r\n/);
   });
 
-  it('writes exact rupee amounts and the right rows', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    const txt = (await getBin(agent, `/api/reports/csv?${OCT}&section=transactions`)).body.toString('utf8');
-    const lines = txt.replace('\uFEFF', '').trim().split('\r\n');
-    expect(lines[0]).toBe('Date,Title,Category,Type,Money in,Money out');
-    expect(txt).toContain('2026-10-10,A-lunch,Food,Expense,,250.50');
-    expect(txt).toContain('A-tuition payment,Fees,Fee payment,,1200.00');
-    expect(txt).toContain('Lent to A-Anu,Lending,Lent to friend,,300.00');
-    expect(txt).toContain('Borrowed from A-Ben,Borrowing,Borrowed,200.00,');
-    expect(txt).not.toContain('A-boundary');
-    const summary = (await getBin(agent, `/api/reports/csv?${OCT}&section=summary`)).body.toString('utf8');
-    expect(summary).toContain('Remaining balance,10449.50');
+  it('supports the other datasets and report-type defaults', async () => {
+    const { agent } = await signup('alice');
+    await seedAlice(agent);
+    const loans = (await download(agent, '/api/reports/csv?dataset=loans')).body.toString();
+    expect(loans).toContain('Lent,Arjun Lent');
+    expect(loans).toContain('Borrowed,Nikhil Owed');
+    expect((await download(agent, '/api/reports/csv?type=fees')).body.toString()).toContain('Semester fee,tuition,2026-27');
+    expect((await download(agent, '/api/reports/csv?type=fees&academicYear=1999-00')).body.toString()).not.toContain('Semester fee');
+    expect((await download(agent, '/api/reports/csv?type=income&dataset=income')).body.toString()).toContain('Monthly pocket money');
   });
 
-  it('neutralises spreadsheet formulas in user-entered text', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A', { hostile: true });
-    const txt = (await getBin(agent, `/api/reports/csv?${OCT}&section=expenses`)).body.toString('utf8');
-    expect(txt).toContain(`"'=HYPERLINK(""http://evil.example"",""x"")"`);
-    expect(txt).not.toMatch(/,=HYPERLINK/);
-    expect(txt).not.toMatch(/^=/m);
-  });
-});
-
-describe('XLSX export', () => {
-  it('has the seven worksheets from the spec, with numeric money and totals', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    const res = await getBin(agent, `/api/reports/xlsx?${OCT}`);
-    expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toContain('spreadsheetml');
-    const wb = await loadWb(res.body);
-    expect(wb.worksheets.map((w) => w.name)).toEqual(['Dashboard Summary', 'Income', 'Expenses', 'Fees and Payments', 'Borrowed Money', 'Lent Money', 'Budgets and Savings']);
-
-    const expenses = wb.getWorksheet('Expenses')!;
-    expect(expenses.getRow(2).getCell(2).value).toBe('A-lunch');
-    const amount = expenses.getRow(2).getCell(4);
-    expect(amount.value).toBe(250.5);
-    expect(amount.numFmt).toContain('₹');
-    const date = expenses.getRow(2).getCell(1).value as Date;
-    expect(date.toISOString().slice(0, 10)).toBe('2026-10-10');
-    expect(expenses.getRow(3).getCell(1).value).toBe('Total');
-    expect((expenses.getRow(3).getCell(4).value as ExcelJS.CellFormulaValue).result).toBe(250.5);
-    expect(expenses.autoFilter).toBeTruthy();
-
-    const summary = wb.getWorksheet('Dashboard Summary')!;
-    const labels: Record<string, unknown> = {};
-    summary.eachRow((row) => { labels[String(row.getCell(1).value)] = row.getCell(2).value; });
-    expect(labels['Remaining balance']).toBe(10449.5);
-    expect(labels['Opening balance']).toBe(2000);
-  });
-
-  it('narrower scopes produce fewer sheets', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    const names = async (scope: string) => {
-      const wb = await loadWb((await getBin(agent, `/api/reports/xlsx?${OCT}&scope=${scope}`)).body);
-      return wb.worksheets.map((w) => w.name);
-    };
-    expect(await names('expenses')).toEqual(['Dashboard Summary', 'Expenses']);
-    expect(await names('income')).toEqual(['Dashboard Summary', 'Income']);
-    expect(await names('fees')).toEqual(['Dashboard Summary', 'Fees and Payments']);
+  it('treats custom from/to as whole IST days', async () => {
+    const { agent } = await signup('alice');
+    // 20:00 UTC on 5 Nov is 01:30 IST on 6 Nov.
+    await agent.post('/api/expenses').send({ title: 'Late night chai', amount: 10, category: 'Food', date: '2026-11-05T20:00:00.000Z' });
+    const hit = await download(agent, '/api/reports/csv?type=custom&dataset=expenses&from=2026-11-06&to=2026-11-06');
+    expect(hit.body.toString()).toContain('06/11/2026,Late night chai');
+    const miss = await download(agent, '/api/reports/csv?type=custom&dataset=expenses&from=2026-11-05&to=2026-11-05');
+    expect(miss.body.toString()).not.toContain('Late night chai');
   });
 });
 
 describe('PDF export', () => {
-  async function pdfText(buf: Buffer): Promise<{ text: string; pages: number }> {
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), useSystemFonts: true }).promise;
-    let text = '';
-    for (let i = 1; i <= doc.numPages; i++) {
-      const content = await (await doc.getPage(i)).getTextContent();
-      text += content.items.map((it) => ('str' in it ? it.str : '')).join(' ') + '\n';
-    }
-    return { text, pages: doc.numPages };
-  }
-
-  it('is a real PDF with the user, period, balances and the ₹ sign', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    const res = await getBin(agent, `/api/reports/pdf?${OCT}`);
+  it('produces a valid PDF with the required sections and figures', async () => {
+    const { agent } = await signup('alice');
+    await seedAlice(agent);
+    const res = await download(agent, '/api/reports/pdf?type=monthly');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe('application/pdf');
-    const buf = res.body as Buffer;
-    expect(buf.subarray(0, 5).toString()).toBe('%PDF-');
-    expect(buf.subarray(-8).toString()).toContain('%%EOF');
-    const { text, pages } = await pdfText(buf);
-    expect(pages).toBeGreaterThanOrEqual(1);
-    expect(text).toContain('Monthly report');
-    expect(text).toContain('October 2026');
-    expect(text).toContain('Test a');
-    expect(text).toContain('₹10,449.50'); // remaining balance
-    expect(text).toContain('A-lunch');
-    expect(text).toContain('Upcoming payments');
-    expect(text).toContain('A-Laptop');
-    expect(text).toMatch(/Page 1 of \d+/);
+    expect(res.body.subarray(0, 5).toString()).toBe('%PDF-');
+    const { text } = await pdfParse(res.body);
+    for (const needle of ['Monthly Financial Report', 'Test alice', 'Opening balance', 'Rs. 10,000.00', 'Total income', 'Total expenses', 'Remaining balance', 'Rs. 10,349.50',
+      'Category-wise spending', 'Transaction history', 'Upcoming payments', 'Savings summary', 'Biriyani Zeta', 'Semester fee', 'Laptop Fund'])
+      expect(text, needle).toContain(needle);
   });
 
-  it('paginates long histories without losing rows', async () => {
-    const { agent } = await signup('a');
-    await agent.post('/api/income').send({ source: 'parents', amount: 100000, date: '2026-10-01T10:00:00Z' });
-    for (let i = 0; i < 70; i++) await agent.post('/api/expenses').send({ title: `Row-${i}`, amount: 10, category: 'Food', date: '2026-10-02T10:00:00Z' });
-    const { text, pages } = await pdfText((await getBin(agent, `/api/reports/pdf?${OCT}`)).body as Buffer);
-    expect(pages).toBeGreaterThanOrEqual(3);
-    expect(text).toContain('Row-0');
-    expect(text).toContain('Row-69');
+  it('paginates long histories and numbers the pages', async () => {
+    const { agent } = await signup('alice');
+    for (let i = 0; i < 120; i++) await agent.post('/api/expenses').send({ title: `Item ${i}`, amount: 1, category: 'Food', date: nowIso() });
+    const { numpages, text } = await pdfParse((await download(agent, '/api/reports/pdf')).body);
+    expect(numpages).toBeGreaterThanOrEqual(3);
+    expect(text).toContain(`Page ${numpages} of ${numpages}`);
+    expect(text).toContain('Item 119');
   });
 
-  it('other scopes get their own title', async () => {
-    const { agent } = await signup('a');
-    await seed(agent, 'A');
-    const titles: Record<string, string> = { expenses: 'Expense report', income: 'Income report', fees: 'Fee report' };
-    for (const [scope, title] of Object.entries(titles)) {
-      const { text } = await pdfText((await getBin(agent, `/api/reports/pdf?${OCT}&scope=${scope}`)).body as Buffer);
-      expect(text, scope).toContain(title);
-    }
-    const yearly = await pdfText((await getBin(agent, '/api/reports/pdf?year=2026')).body as Buffer);
-    expect(yearly.text).toContain('Yearly report');
-  });
-});
-
-describe('user isolation in every export', () => {
-  it('a second user only ever sees their own data, in JSON, CSV, XLSX and PDF', async () => {
-    const a = await signup('a');
-    const b = await signup('b');
-    await seed(a.agent, 'ALPHA');
-    await seed(b.agent, 'BRAVO');
-
-    const collect = async (agent: Agent) => {
-      const parts: string[] = [JSON.stringify((await agent.get(`/api/reports/summary?${OCT}`)).body)];
-      for (const section of CSV_SECTIONS) parts.push((await getBin(agent, `/api/reports/csv?${OCT}&section=${section}`)).body.toString('utf8'));
-      const wb = await loadWb((await getBin(agent, `/api/reports/xlsx?${OCT}`)).body);
-      wb.eachSheet((ws) => ws.eachRow((row) => row.eachCell((c) => parts.push(JSON.stringify(c.value)))));
-      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      const pdf = await pdfjs.getDocument({ data: new Uint8Array((await getBin(agent, `/api/reports/pdf?${OCT}`)).body as Buffer), useSystemFonts: true }).promise;
-      for (let i = 1; i <= pdf.numPages; i++) parts.push((await (await pdf.getPage(i)).getTextContent()).items.map((it) => ('str' in it ? it.str : '')).join(' '));
-      return parts.join('\n');
-    };
-
-    const forA = await collect(a.agent);
-    const forB = await collect(b.agent);
-    expect(forA).toContain('ALPHA-lunch');
-    expect(forA).toContain('ALPHA-Laptop');
-    expect(forA).not.toContain('BRAVO');
-    expect(forB).toContain('BRAVO-lunch');
-    expect(forB).toContain('BRAVO-Laptop');
-    expect(forB).not.toContain('ALPHA');
+  it('renders the expense-only, income-only and fee reports', async () => {
+    const { agent } = await signup('alice');
+    await seedAlice(agent);
+    const exp = (await pdfParse((await download(agent, '/api/reports/pdf?type=expenses')).body)).text;
+    expect(exp).toContain('Expense Report');
+    expect(exp).toContain('Expense records');
+    expect(exp).not.toContain('Savings summary');
+    const inc = (await pdfParse((await download(agent, '/api/reports/pdf?type=income')).body)).text;
+    expect(inc).toContain('Income by source');
+    const fee = (await pdfParse((await download(agent, '/api/reports/pdf?type=fees')).body)).text;
+    expect(fee).toContain('Fees & Payments Report');
+    expect(fee).toContain('REF-ALICE-1');
   });
 
-  it('a user with no data gets valid, empty reports in every format', async () => {
-    const { agent } = await signup('empty');
-    expect((await agent.get(`/api/reports/summary?${OCT}`)).body.data.summary.closingPaise).toBe(0);
-    for (const fmt of ['pdf', 'xlsx']) {
-      const res = await getBin(agent, `/api/reports/${fmt}?${OCT}`);
-      expect(res.status, fmt).toBe(200);
-      expect((res.body as Buffer).length, fmt).toBeGreaterThan(1000);
-    }
-    const csv = await getBin(agent, `/api/reports/csv?${OCT}`);
-    expect(csv.status).toBe(200);
-    expect(csv.body.toString('utf8')).toBe('\uFEFFDate,Title,Category,Type,Money in,Money out\r\n');
-    const wb = await loadWb((await getBin(agent, `/api/reports/xlsx?${OCT}`)).body);
-    expect(wb.getWorksheet('Expenses')!.getRow(2).getCell(1).value).toBe('No records');
+  it('yearly reports cover the whole IST year', async () => {
+    const { agent } = await signup('alice');
+    await agent.post('/api/income').send({ source: 'scholarship', amount: 777, date: nowIso() });
+    const year = new Date().getUTCFullYear();
+    const { text } = await pdfParse((await download(agent, `/api/reports/pdf?type=yearly&year=${year}`)).body);
+    expect(text).toContain('Yearly Financial Report');
+    expect(text).toContain('Rs. 777.00');
   });
 });
 
-describe('access, validation and notifications', () => {
-  it('every report route needs a login', async () => {
-    for (const p of ['summary', 'pdf', 'xlsx', 'csv']) expect((await anonymous().get(`/api/reports/${p}?${OCT}`)).status, p).toBe(401);
+describe('export safety', () => {
+  it('another account never receives my data in any format, and gets its own zeros', async () => {
+    const alice = await signup('alice');
+    const bob = await signup('bob');
+    await seedAlice(alice.agent);
+
+    const csv = (await download(bob.agent, '/api/reports/csv')).body.toString();
+    const loans = (await download(bob.agent, '/api/reports/csv?dataset=loans')).body.toString();
+    const wb = await xlsxOf((await download(bob.agent, '/api/reports/xlsx')).body);
+    const pdf = (await pdfParse((await download(bob.agent, '/api/reports/pdf')).body)).text;
+    const pdfFees = (await pdfParse((await download(bob.agent, '/api/reports/pdf?type=fees')).body)).text;
+    for (const secret of ALICE_SECRETS.filter((s) => s !== 'Test alice')) {
+      for (const [name, blob] of Object.entries({ csv, loans, xlsx: allText(wb), pdf, pdfFees })) expect(blob, `${name} leaks "${secret}"`).not.toContain(secret);
+    }
+    expect(pdf).toContain('Test bob');
+    const summary = wb.getWorksheet('Dashboard Summary')!;
+    summary.eachRow((r) => { if (['Opening balance', 'Total income', 'Total expenses', 'Remaining balance'].includes(String(r.getCell(1).value))) expect(r.getCell(2).value).toBe(0); });
   });
 
-  it('rejects bad ranges, scopes and sections', async () => {
-    const { agent } = await signup('a');
-    const bad = [
-      '/api/reports/summary?month=2026-13',
-      '/api/reports/summary?month=October',
-      '/api/reports/summary?from=2026-10-01',
-      '/api/reports/summary?to=2026-10-01',
-      '/api/reports/summary?from=2026-10-10&to=2026-10-01',
-      '/api/reports/summary?from=2000-01-01&to=2026-10-01',
-      '/api/reports/summary?scope=everything',
-      '/api/reports/summary?year=1850',
-      '/api/reports/csv?section=passwords',
-    ];
-    for (const url of bad) expect((await agent.get(url)).status, url).toBe(400);
+  it('requires login and validates parameters', async () => {
+    expect((await download(anonymous(), '/api/reports/pdf')).status).toBe(401);
+    const { agent } = await signup('alice');
+    for (const bad of ['?month=2026-13', '?type=custom', '?type=custom&from=2026-02-01', '?type=custom&from=2026-03-01&to=2026-02-01', '?type=custom&from=2000-01-01&to=2026-01-01', '?type=bogus', '?from=06-11-2026&to=07-11-2026&type=custom', '?year=1800'])
+      expect((await agent.get('/api/reports/pdf' + bad)).status, bad).toBe(400);
   });
 
-  it('records a notification for each successful export, for that user only', async () => {
-    const a = await signup('a');
-    const b = await signup('b');
-    await getBin(a.agent, `/api/reports/pdf?${OCT}`);
-    await getBin(a.agent, `/api/reports/csv?${OCT}`);
-    expect(await Notification.countDocuments({ userId: a.id, type: 'export_ready' })).toBe(2);
-    expect(await Notification.countDocuments({ userId: b.id, type: 'export_ready' })).toBe(0);
-    const list = (await a.agent.get('/api/notifications')).body.data.items;
-    expect(list.filter((n: { type: string }) => n.type === 'export_ready')).toHaveLength(2);
-  });
-
-  it('never caches exports', async () => {
-    const { agent } = await signup('a');
-    for (const fmt of ['pdf', 'xlsx', 'csv']) expect((await getBin(agent, `/api/reports/${fmt}?${OCT}`)).headers['cache-control']).toBe('no-store');
+  it('notifies when an export is generated', async () => {
+    const { agent } = await signup('alice');
+    await download(agent, '/api/reports/csv');
+    await download(agent, '/api/reports/csv');
+    const items = (await agent.get('/api/notifications')).body.data.items as { type: string }[];
+    expect(items.filter((n) => n.type === 'export_ready')).toHaveLength(2);
   });
 });

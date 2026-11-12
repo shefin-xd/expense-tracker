@@ -1,22 +1,38 @@
 # CampusLedger
 
-Minimal multi-user expense tracker for college students (MERN + TypeScript).
-The API (auth, ledger, CRUD modules, reports/exports) lives in `server/`; the React app lives in `client/`. Phase 5 (deployment docs) is still to come.
+Minimal, private expense tracker for college students (MERN + TypeScript).
+`server/` is the API (Express, MongoDB, integer-paise ledger). `client/` is the React app (Vite, Tailwind, TanStack Query).
+Still to come: deployment guide (Vercel + Render/Railway + Atlas, DNS for expenses.shefin.dev).
 
-## Run the server
+## Run it locally
 ```
+# 1. API
 cd server
-cp .env.example .env      # set MONGODB_URI (Atlas) and a 32+ char JWT_SECRET
+cp .env.example .env      # set MONGODB_URI (an Atlas cluster, or a local replica set) and a 32+ char JWT_SECRET
 npm install
 npm test                  # first run downloads a MongoDB binary for the DB tests
-npm run dev
-npm run seed:owner        # optional: creates the owner account from OWNER_EMAIL / OWNER_PASSWORD
+npm run dev               # http://localhost:4000
+npm run seed:owner        # optional: creates the owner account from OWNER_EMAIL / OWNER_PASSWORD in .env
+
+# 2. App (new terminal)
+cd client
+npm install
+npm run dev               # http://localhost:5173 (Vite proxies /api to the API, so cookies just work)
+npm test                  # unit + screen tests
+npm run build             # type-check and production build into dist/
 ```
+Production: set `VITE_API_URL` (client) to the public API URL, and `CLIENT_URL` + `COOKIE_DOMAIN` (server) so the cookie works across the two subdomains.
 
 ## How money works
-Every money movement is one row in `LedgerEntry` (integer paise). Balance, dashboard and history are all
-computed from it. Rules: income +, expense -, fee payment - (unpaid fees never post), lend -, lend repayment +,
-borrow + (liability, not income), borrow repayment -. Savings goals are tracked separately and never move the balance.
+Every money movement is one row in `LedgerEntry` (integer paise). Balance, dashboard and history are all computed from it.
+Income +, expense -, fee payment - (unpaid fees never post), lend -, lend repayment +, borrow + (a liability, not income),
+borrow repayment -. Savings goals are tracked separately and never move the balance.
+
+## Client
+Pages: Dashboard, Transactions, Expenses, Income, Fees & Payments, Borrow & Lend, Budgets, Savings, Reports & Exports, Settings.
+Light, dark and system themes; sidebar on desktop, bottom bar on phones; the Add button opens a quick-add sheet from anywhere.
+Dates and month boundaries are Asia/Kolkata. The date format preference (DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD) applies everywhere.
+`client/e2e/browser-walkthrough.py` drives a real Firefox through register, every money flow, downloads, themes, mobile layout and sign-out.
 
 ## API (all under /api, cookie auth, amounts in rupees in, `amountPaise` out)
 | Area | Endpoints |
@@ -33,46 +49,10 @@ borrow + (liability, not income), borrow repayment -. Savings goals are tracked 
 | Budgets | GET/PUT budgets/:month (YYYY-MM or "current"); GET budgets/:month/compare |
 | Savings | GET/POST savings; PATCH/DELETE savings/:id |
 | Notifications | GET notifications; POST notifications/read-all, :id/read; DELETE :id |
-| Reports | GET reports/summary, reports/pdf, reports/xlsx, reports/csv (see below) |
+| Reports | GET reports/pdf, reports/xlsx, reports/csv |
 | Health | GET health |
 
-## Reports and exports
-All four endpoints take the same query and only ever read the logged-in user's data.
-
-| Query | Meaning |
-|---|---|
-| `month=2026-10` | Monthly report (IST month). Default: the current month |
-| `year=2026` | Yearly report |
-| `from=2026-10-01&to=2026-10-15` | Custom range, inclusive of the whole last day (IST). Max 5 years |
-| `scope=all\|expenses\|income\|fees` | Full report, or expense-only, income-only, fee report |
-| `section=...` (csv only) | `transactions` (default), `summary`, `income`, `expenses`, `fees`, `fee_payments`, `lent`, `borrowed`, `budgets`, `savings`, `categories` |
-
-- **PDF**: opening balance, income, expenses, remaining balance, category breakdown, transaction history, upcoming
-  payments and savings summary. The Inter font is embedded from `server/assets/fonts` (the built-in PDF fonts have no
-  ₹ sign), so deploy that folder with the server. Very long histories are capped at 2,000 rows in the PDF.
-- **XLSX**: sheets Dashboard Summary, Income, Expenses, Fees and Payments, Borrowed Money, Lent Money, Budgets and
-  Savings (narrower scopes produce fewer sheets). Real numeric and date cells, ₹ number format, header filters and
-  SUBTOTAL totals that follow the filter.
-- **CSV**: UTF-8 with BOM, amounts as plain rupees (`1250.50`), ISO dates. Text that starts with `= + - @` is
-  prefixed with `'` so spreadsheet apps cannot run it as a formula.
-- Opening balance is everything before the range, remaining balance is everything up to its end, and both come from
-  the ledger, so they always match the dashboard. Each successful download adds an in-app "Export ready" notification.
-
-## Tests
-`npm test` runs against a real MongoDB replica set (`mongodb-memory-server`). If it cannot download MongoDB, point it
-at an installed binary: `MONGOMS_SYSTEM_BINARY=/path/to/mongod MONGOMS_VERSION=<its version> npm test`.
-
-## Run the client
-```
-cd client
-npm install
-npm run dev          # http://localhost:5173 — /api is proxied to http://localhost:4000, so cookies just work
-npm test             # utilities + jsdom smoke tests for every page
-npm run build        # type-checks, then builds to client/dist
-```
-Production: set `VITE_API_URL` (e.g. `https://api.shefin.dev/api`) at build time. `vercel.json` provides the SPA fallback.
-The server must have `CLIENT_URL` set to the exact frontend origin (CORS with credentials).
-
-### Client structure
-`src/lib` (API client, money, IST dates) · `src/components/ui` (design-system parts) · `src/layouts` · `src/features/<area>` (api hooks, forms, page) · `src/store` (theme, quick-add, toasts).
-Amounts are typed as text and sent to the API as exact rupee strings; they are never parsed to floats. Every date is an Asia/Kolkata calendar day.
+### Reports and exports
+`GET /api/reports/{pdf|xlsx|csv}`: `type` = monthly (default), yearly, custom, expenses, income, fees; `month=2026-11`, `year=2026`,
+`from=2026-11-01&to=2026-11-30` (whole IST days, max 5 years), `academicYear=2026-27` (fees), `dataset=transactions|expenses|income|fees|loans` (CSV).
+PDF amounts print as "Rs." (standard PDF fonts have no rupee glyph); spreadsheets use ₹. CSV text cells starting with = + - @ are prefixed with ' to block formula injection.

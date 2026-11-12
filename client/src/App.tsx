@@ -1,81 +1,70 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { Toaster } from '@/components/ui/feedback';
-import { Skeleton } from '@/components/ui/feedback';
-import { useMe, ME_KEY } from '@/hooks/useAuth';
-import { useTheme } from '@/hooks/useTheme';
-import { setUnauthorizedHandler } from '@/lib/api';
-import { queryClient } from '@/lib/query';
-import AppLayout from '@/layouts/AppLayout';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { lazy, useEffect, type ReactNode } from 'react';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Toaster } from '@/components/ui/Toaster';
+import { GuestOnly, RequireAuth } from '@/features/auth/RequireAuth';
+import { LoginPage, RegisterPage } from '@/features/auth/AuthPages';
+import { AppLayout } from '@/layouts/AppLayout';
+import { ApiError, setUnauthorizedHandler } from '@/services/api';
 
-const Login = lazy(() => import('@/features/auth/Login'));
-const Register = lazy(() => import('@/features/auth/Register'));
-const Dashboard = lazy(() => import('@/features/dashboard/DashboardPage'));
-const Transactions = lazy(() => import('@/features/transactions/TransactionsPage'));
-const Expenses = lazy(() => import('@/features/expenses/ExpensesPage'));
-const IncomePage = lazy(() => import('@/features/income/IncomePage'));
-const Fees = lazy(() => import('@/features/fees/FeesPage'));
-const Loans = lazy(() => import('@/features/loans/LoansPage'));
-const Budgets = lazy(() => import('@/features/budgets/BudgetsPage'));
-const Savings = lazy(() => import('@/features/savings/SavingsPage'));
-const Reports = lazy(() => import('@/features/reports/ReportsPage'));
-const Settings = lazy(() => import('@/features/settings/SettingsPage'));
+const Dashboard = lazy(() => import('@/pages/DashboardPage'));
+const Transactions = lazy(() => import('@/pages/TransactionsPage'));
+const Expenses = lazy(() => import('@/pages/ExpensesPage'));
+const Income = lazy(() => import('@/pages/IncomePage'));
+const Fees = lazy(() => import('@/pages/FeesPage'));
+const BorrowLend = lazy(() => import('@/pages/BorrowLendPage'));
+const Budgets = lazy(() => import('@/pages/BudgetsPage'));
+const Savings = lazy(() => import('@/pages/SavingsPage'));
+const Reports = lazy(() => import('@/pages/ReportsPage'));
+const Settings = lazy(() => import('@/pages/SettingsPage'));
+const NotFound = lazy(() => import('@/pages/NotFoundPage'));
 
-const PageFallback = () => (
-  <div className="space-y-4 p-6" aria-busy aria-label="Loading">
-    <Skeleton className="h-7 w-48" /><Skeleton className="h-32 w-full" /><Skeleton className="h-64 w-full" />
-  </div>
+export function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: (n, e) => !(e instanceof ApiError && e.status >= 400 && e.status < 500) && n < 2 },
+    },
+  });
+}
+
+function Providers({ client, children }: { client: QueryClient; children: ReactNode }) {
+  // A 401 from any data request means the session ended: re-check who is signed in, which sends us to /login.
+  useEffect(() => { setUnauthorizedHandler(() => { client.invalidateQueries({ queryKey: ['me'] }); }); }, [client]);
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
+export const AppRoutes = () => (
+  <Routes>
+    <Route element={<GuestOnly />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+    </Route>
+    <Route element={<RequireAuth />}>
+      <Route element={<AppLayout />}>
+        <Route index element={<Dashboard />} />
+        <Route path="transactions" element={<Transactions />} />
+        <Route path="expenses" element={<Expenses />} />
+        <Route path="income" element={<Income />} />
+        <Route path="fees" element={<Fees />} />
+        <Route path="borrow-lend" element={<BorrowLend />} />
+        <Route path="budgets" element={<Budgets />} />
+        <Route path="savings" element={<Savings />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Route>
+  </Routes>
 );
 
-function RequireAuth() {
-  const me = useMe();
-  const loc = useLocation();
-  if (me.isPending) return <PageFallback />;
-  if (me.isError) return <div className="p-8 text-center text-sm text-muted">Can’t reach the server. Check your connection and reload.</div>;
-  if (!me.data) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
-  return <Outlet />;
-}
-
-function PublicOnly() {
-  const me = useMe();
-  if (me.isPending) return <PageFallback />;
-  return me.data ? <Navigate to="/" replace /> : <Outlet />;
-}
-
-export default function App() {
-  useTheme();
-  useEffect(() => {
-    // Any 401 from the API means the session is gone: drop cached data and show the login page.
-    setUnauthorizedHandler(() => { queryClient.clear(); queryClient.setQueryData(ME_KEY, null); });
-    return () => setUnauthorizedHandler(null);
-  }, []);
-
+export default function App({ client = makeQueryClient() }: { client?: QueryClient }) {
   return (
-    <>
-      <Suspense fallback={<PageFallback />}>
-        <Routes>
-          <Route element={<PublicOnly />}>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-          </Route>
-          <Route element={<RequireAuth />}>
-            <Route element={<AppLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="transactions" element={<Transactions />} />
-              <Route path="expenses" element={<Expenses />} />
-              <Route path="income" element={<IncomePage />} />
-              <Route path="fees" element={<Fees />} />
-              <Route path="loans" element={<Loans />} />
-              <Route path="budgets" element={<Budgets />} />
-              <Route path="savings" element={<Savings />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-      <Toaster />
-    </>
+    <ErrorBoundary>
+      <Providers client={client}>
+        <BrowserRouter><AppRoutes /></BrowserRouter>
+        <Toaster />
+      </Providers>
+    </ErrorBoundary>
   );
 }

@@ -29,47 +29,23 @@ export function dayKeyIST(d: Date): string {
   return new Date(d.getTime() + IST_MS).toISOString().slice(0, 10);
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+export const isDateOnly = (s: string) => DATE_ONLY.test(s);
 
-export function startOfDayIST(d: Date): Date {
-  return new Date(Math.floor((d.getTime() + IST_MS) / DAY_MS) * DAY_MS - IST_MS);
+/** Start of an IST calendar day given "YYYY-MM-DD". */
+export function dayStartIST(day: string): Date {
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d) - IST_MS);
 }
+export const dayEndIST = (day: string): Date => new Date(dayStartIST(day).getTime() + 24 * 60 * 60 * 1000 - 1);
 
-export function endOfDayIST(d: Date): Date {
-  return new Date(startOfDayIST(d).getTime() + DAY_MS - 1);
-}
-
-export type DateFormat = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
-
-export function formatDateIST(d: Date, fmt: DateFormat = 'DD/MM/YYYY'): string {
+/** dd/mm/yyyy in IST, the Indian convention. */
+export function formatDateIST(d: Date): string {
   const [y, m, day] = dayKeyIST(d).split('-') as [string, string, string];
-  if (fmt === 'YYYY-MM-DD') return `${y}-${m}-${day}`;
-  return fmt === 'MM/DD/YYYY' ? `${m}/${day}/${y}` : `${day}/${m}/${y}`;
+  return `${day}/${m}/${y}`;
 }
 
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-export function monthLabel(month: string): string {
-  const [y, m] = month.split('-').map(Number) as [number, number];
-  return `${MONTH_NAMES[m - 1]} ${y}`;
-}
-
-/** The IST calendar day of `d`, as a UTC-midnight Date, so spreadsheet cells show the right day. */
-export function istDateAsUtc(d: Date): Date {
-  return new Date(Math.floor((d.getTime() + IST_MS) / DAY_MS) * DAY_MS);
-}
-
-/** Every "YYYY-MM" between two instants (inclusive), in IST. */
-export function monthsBetween(from: Date, to: Date): string[] {
-  const out: string[] = [];
-  let [y, m] = currentMonthIST(from).split('-').map(Number) as [number, number];
-  const end = currentMonthIST(to);
-  for (;;) {
-    const key = `${y}-${String(m).padStart(2, '0')}`;
-    out.push(key);
-    if (key >= end) break;
-    m += 1;
-    if (m > 12) { m = 1; y += 1; }
-  }
-  return out;
+/** A Date whose UTC calendar day equals the IST day, so Excel shows the right date. */
+export function excelDateIST(d: Date): Date {
+  return new Date(`${dayKeyIST(d)}T00:00:00.000Z`);
 }
