@@ -5,6 +5,17 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import ElementClickInterceptedException
+from selenium.webdriver.remote.webelement import WebElement
+
+# A toast or an animation can sit over a button for a moment: retry, then fall back to a script click.
+_orig_click = WebElement.click
+def _click(self):
+    for _ in range(8):
+        try: return _orig_click(self)
+        except ElementClickInterceptedException: time.sleep(0.4)
+    self.parent.execute_script('arguments[0].click()', self)
+WebElement.click = _click
 
 # Real-browser walkthrough: needs the API on :4000, `vite preview` on :4173, Firefox + geckodriver, and `pip install selenium`.
 # Start with an empty database. Env: BASE_URL, FIREFOX_BIN, GECKODRIVER, DOWNLOAD_DIR, SHOT_DIR.
@@ -62,7 +73,7 @@ def errs(): return d.execute_script("return window.__errs || []")
 try:
     d.get(BASE + '/')
     check('signed-out visit redirects to login', has_text('Sign in') and '/login' in d.current_url)
-    d.execute_script("window.__errs=[];window.addEventListener('error',e=>window.__errs.push(String(e.message)));window.addEventListener('unhandledrejection',e=>window.__errs.push('rejection '+String(e.reason)));var ce=console.error;console.error=function(){window.__errs.push([].join.call(arguments,' '));ce.apply(console,arguments)};")
+    d.execute_script("window.__errs=[];window.addEventListener('error',e=>window.__errs.push(String(e.message)));window.addEventListener('securitypolicyviolation',e=>window.__errs.push('CSP '+e.violatedDirective+' '+e.blockedURI));window.addEventListener('unhandledrejection',e=>window.__errs.push('rejection '+String(e.reason)));var ce=console.error;console.error=function(){window.__errs.push([].join.call(arguments,' '));ce.apply(console,arguments)};")
     shot('01-login')
 
     # ---- register
@@ -153,6 +164,11 @@ try:
     nav('Settings'); xp("//button[@role='tab' and normalize-space()='Light']").click(); time.sleep(0.4)
     fill('Hostel', "CET Men's Hostel (Block A)"); btn('Save profile'); check('profile saved', toast('Profile saved'))
 
+    # ---- change password keeps this device signed in
+    nav('Settings'); fill('Current password', 'Passw0rd!x'); fill('New password', 'Changed123x'); fill('Confirm new password', 'Changed123x')
+    btn('Change password'); check('password changed toast', toast('Password changed'))
+    d.refresh(); time.sleep(1.5); check('still signed in after changing password', has_text('Settings') and '/login' not in d.current_url)
+
     # ---- mobile layout
     d.set_window_size(390, 844); d.get(BASE + '/'); time.sleep(1.5)
     check('mobile bottom nav visible', xp("//nav[@aria-label='Main' and contains(@class,'fixed')]").is_displayed())
@@ -170,6 +186,27 @@ try:
     d.get(BASE + '/'); time.sleep(1); xp("//button[normalize-space()='More']").click(); btn('Sign out', dialog())
     check('sign out returns to login', has_text('Sign in') and '/login' in d.current_url)
     d.get(BASE + '/expenses'); time.sleep(1); check('protected page redirects after sign out', '/login' in d.current_url)
+
+    # ---- forgot password -> emailed link -> new password (needs SERVER_LOG: the API prints the link when no SMTP is set)
+    d.set_window_size(1280, 900)
+    server_log = os.environ.get('SERVER_LOG')
+    if server_log:
+        import re
+        d.get(BASE + '/login'); time.sleep(0.8); xp("//a[normalize-space()='Forgot password?']").click()
+        fill('Email', 'shefin@example.com'); btn('Send reset link')
+        check('forgot password confirms neutrally', has_text('a reset link is on its way'))
+        time.sleep(1.5)
+        tokens = re.findall(r'reset-password\?token=([a-f0-9]{64})', open(server_log).read())
+        check('reset link was emailed', bool(tokens))
+        d.get(BASE + '/reset-password?token=' + tokens[-1]); fill('New password', 'Reset456xyz'); fill('Confirm new password', 'Reset456xyz'); btn('Change password')
+        check('reset sends you to sign in', has_text('Sign in') and '/login' in d.current_url)
+        d.get(BASE + '/reset-password?token=' + tokens[-1]); fill('New password', 'Another789xyz'); fill('Confirm new password', 'Another789xyz'); btn('Change password')
+        check('used reset link is refused', has_text('expired or was already used'))
+        d.get(BASE + '/login'); time.sleep(0.8); fill('Email', 'shefin@example.com'); fill('Password', 'Changed123x'); btn('Sign in')
+        check('old password no longer works', has_text('do not match'))
+        fill('Password', 'Reset456xyz'); btn('Sign in')
+        check('new password signs in with data intact', has_text('Available balance') and wait_balance('₹8,500.00'))
+        xp("//aside//button[normalize-space()='Sign out']").click(); time.sleep(0.8)
 
     # ---- second user sees none of it
     d.set_window_size(1280, 900); d.get(BASE + '/register'); time.sleep(0.8)

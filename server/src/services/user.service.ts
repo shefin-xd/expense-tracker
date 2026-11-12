@@ -26,6 +26,7 @@ export async function changePassword(userId: string, currentPassword: string, ne
   if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) throw unauthorized('Current password is incorrect');
   if (currentPassword === newPassword) throw badRequest('New password must be different');
   user.passwordHash = await bcrypt.hash(newPassword, 12);
+  user.passwordChangedAt = new Date();
   await user.save();
 }
 

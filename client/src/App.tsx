@@ -4,7 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from '@/components/ui/Toaster';
 import { GuestOnly, RequireAuth } from '@/features/auth/RequireAuth';
-import { LoginPage, RegisterPage } from '@/features/auth/AuthPages';
+import { ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from '@/features/auth/AuthPages';
 import { AppLayout } from '@/layouts/AppLayout';
 import { ApiError, setUnauthorizedHandler } from '@/services/api';
 
@@ -40,6 +40,9 @@ export const AppRoutes = () => (
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
     </Route>
+    {/* Reachable whether or not you are signed in: the link arrives by email. */}
+    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+    <Route path="/reset-password" element={<ResetPasswordPage />} />
     <Route element={<RequireAuth />}>
       <Route element={<AppLayout />}>
         <Route index element={<Dashboard />} />

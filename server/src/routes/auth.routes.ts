@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { login, logout, me, register } from '../controllers/auth.controller';
+import { forgotPassword, login, logout, me, register, resetPasswordHandler } from '../controllers/auth.controller';
 import { requireAuth } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
-import { loginSchema, registerSchema } from '../validators/auth.validators';
+import { forgotSchema, loginSchema, registerSchema, resetSchema } from '../validators/auth.validators';
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -18,3 +18,7 @@ authRouter.post('/register', authLimiter, validateBody(registerSchema), register
 authRouter.post('/login', authLimiter, validateBody(loginSchema), login);
 authRouter.post('/logout', logout);
 authRouter.get('/me', requireAuth, me);
+
+const resetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-7', legacyHeaders: false, skip: () => process.env.NODE_ENV === 'test' });
+authRouter.post('/forgot-password', resetLimiter, validateBody(forgotSchema), forgotPassword);
+authRouter.post('/reset-password', resetLimiter, validateBody(resetSchema), resetPasswordHandler);

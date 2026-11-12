@@ -7,6 +7,8 @@ const userSchema = new Schema(
     name: { type: String, required: true, trim: true, maxlength: 100 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254 },
     passwordHash: { type: String, required: true, select: false },
+    // Sessions issued before this moment are rejected (set on password change and reset).
+    passwordChangedAt: { type: Date, select: false },
     college: { type: String, trim: true, maxlength: 150 },
     department: { type: String, required: true, trim: true, maxlength: 100 },
     studentYear: { type: String, enum: STUDENT_YEARS, required: true },

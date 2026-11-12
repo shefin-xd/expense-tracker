@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { refreshSession } from '../controllers/auth.controller';
 import { COOKIE_NAME, requireAuth } from '../middleware/auth';
 import { bodyOf, queryOf, validateBody, validateQuery } from '../middleware/validate';
 import { createCategory, deleteCategory, listCategories, renameCategory } from '../services/category.service';
@@ -48,6 +49,7 @@ userRouter.patch('/me', validateBody(profileUpdateSchema), asyncHandler(async (r
 userRouter.post('/me/password', validateBody(passwordChangeSchema), asyncHandler(async (req, res) => {
   const b = bodyOf(req, passwordChangeSchema);
   await changePassword(req.userId!, b.currentPassword, b.newPassword);
+  refreshSession(res, req.userId!); // this device stays signed in; all other sessions end
   ok(res, null);
 }));
 userRouter.get('/me/export', asyncHandler(async (req, res) => ok(res, await exportPersonalData(req.userId!))));

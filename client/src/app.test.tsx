@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppRoutes } from './App';
-import { LoginPage } from './features/auth/AuthPages';
+import { ForgotPasswordPage, LoginPage, ResetPasswordPage } from './features/auth/AuthPages';
 import { RequireAuth } from './features/auth/RequireAuth';
 import { ExpenseForm } from './features/expenses/forms';
 import { FeeForm, PaymentForm } from './features/fees/forms';
@@ -162,5 +162,60 @@ describe('modal accessibility', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(opener).toHaveFocus();
+  });
+});
+
+describe('forgot and reset password screens', () => {
+  const token = 'a'.repeat(64);
+  it('asks for an email, then shows the same neutral confirmation', async () => {
+    const user = userEvent.setup();
+    const calls = mockApi((r) => (r.path === '/auth/forgot-password' ? { data: { message: 'ok' } } : undefined));
+    renderWithProviders(<ForgotPasswordPage />);
+    await user.click(screen.getByRole('button', { name: 'Send reset link' }));
+    expect(await screen.findByText('Enter your email')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Email'), 'who@example.com');
+    await user.click(screen.getByRole('button', { name: 'Send reset link' }));
+    expect(await screen.findByText(/a reset link is on its way/)).toBeInTheDocument();
+    expect(calls.find((c) => c.path === '/auth/forgot-password')!.body).toEqual({ email: 'who@example.com' });
+  });
+  it('rejects mismatched or weak passwords before calling the server', async () => {
+    const user = userEvent.setup();
+    const calls = mockApi(() => undefined);
+    renderWithProviders(<ResetPasswordPage />, { route: `/reset-password?token=${token}` });
+    await user.type(screen.getByLabelText('New password'), 'short');
+    await user.type(screen.getByLabelText('Confirm new password'), 'different1');
+    await user.click(screen.getByRole('button', { name: 'Change password' }));
+    expect(await screen.findByText('Use at least 8 characters')).toBeInTheDocument();
+    expect(screen.getByText('The passwords do not match')).toBeInTheDocument();
+    expect(calls).toHaveLength(0);
+  });
+  it('sends the token with the new password and goes to sign in', async () => {
+    const user = userEvent.setup();
+    const calls = mockApi((r) => (r.path === '/auth/reset-password' ? { data: null } : undefined));
+    renderWithProviders(<><Routes><Route path="/reset-password" element={<ResetPasswordPage />} /><Route path="/login" element={<p>login page</p>} /></Routes><Toaster /></>, { route: `/reset-password?token=${token}` });
+    await user.type(screen.getByLabelText('New password'), 'BrandNew123');
+    await user.type(screen.getByLabelText('Confirm new password'), 'BrandNew123');
+    await user.click(screen.getByRole('button', { name: 'Change password' }));
+    expect(await screen.findByText('login page')).toBeInTheDocument();
+    expect(calls.find((c) => c.path === '/auth/reset-password')!.body).toEqual({ token, password: 'BrandNew123' });
+  });
+  it('offers a new link when the old one has expired, and when the link is malformed', async () => {
+    const user = userEvent.setup();
+    mockApi((r) => (r.path === '/auth/reset-password' ? { status: 400, error: { code: 'BAD_REQUEST', message: 'This reset link has expired or was already used. Ask for a new one.' } } : undefined));
+    const first = renderWithProviders(<ResetPasswordPage />, { route: `/reset-password?token=${token}` });
+    await user.type(screen.getByLabelText('New password'), 'BrandNew123');
+    await user.type(screen.getByLabelText('Confirm new password'), 'BrandNew123');
+    await user.click(screen.getByRole('button', { name: 'Change password' }));
+    expect(await screen.findByRole('link', { name: 'Get a new link' })).toBeInTheDocument();
+    first.unmount();
+    renderWithProviders(<ResetPasswordPage />, { route: '/reset-password?token=oops' });
+    expect(screen.getByRole('heading', { name: 'This link is not valid' })).toBeInTheDocument();
+  });
+  it('is reachable while signed out, and the login page links to it', async () => {
+    mockApi((r) => (r.path === '/auth/me' ? { status: 401, error: { code: 'UNAUTHORIZED', message: 'x' } } : undefined));
+    renderWithProviders(<AppRoutes />, { route: '/reset-password?token=zzz' });
+    expect(await screen.findByRole('heading', { name: 'This link is not valid' })).toBeInTheDocument();
+    renderWithProviders(<LoginPage />);
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password');
   });
 });

@@ -1,7 +1,7 @@
 import type { CookieOptions, Request, Response } from 'express';
 import { env, isProd } from '../config/env';
 import { COOKIE_NAME, signToken } from '../middleware/auth';
-import { getUserById, loginUser, registerUser } from '../services/auth.service';
+import { getUserById, loginUser, registerUser, requestPasswordReset, resetPassword } from '../services/auth.service';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const cookieOptions = (): CookieOptions => ({
@@ -36,3 +36,17 @@ export const logout = (_req: Request, res: Response) => {
 export const me = asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: { user: await getUserById(req.userId!) } });
 });
+
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+  await requestPasswordReset(req.body.email);
+  res.json({ success: true, data: { message: 'If that email has an account, a reset link is on its way.' } });
+});
+
+export const resetPasswordHandler = asyncHandler(async (req: Request, res: Response) => {
+  await resetPassword(req.body.token, req.body.password);
+  res.clearCookie(COOKIE_NAME, cookieOptions());
+  res.json({ success: true, data: null });
+});
+
+/** Used after a password change so the current device stays signed in while every other session ends. */
+export const refreshSession = (res: Response, userId: string) => startSession(res, userId);

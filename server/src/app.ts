@@ -13,7 +13,8 @@ export function createApp() {
   app.disable('x-powered-by');
 
   app.use(helmet());
-  app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
+  // A trailing slash in CLIENT_URL must not break CORS: browsers send the origin without one.
+  app.use(cors({ origin: env.CLIENT_URL.replace(/\/+$/, ''), credentials: true }));
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
 

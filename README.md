@@ -2,7 +2,7 @@
 
 Minimal, private expense tracker for college students (MERN + TypeScript).
 `server/` is the API (Express, MongoDB, integer-paise ledger). `client/` is the React app (Vite, Tailwind, TanStack Query).
-Still to come: deployment guide (Vercel + Render/Railway + Atlas, DNS for expenses.shefin.dev).
+**Deploying:** see [DEPLOYMENT.md](DEPLOYMENT.md) (Atlas + Render + Vercel, DNS for expenses.shefin.dev).
 
 ## Run it locally
 ```
@@ -21,6 +21,7 @@ npm run dev               # http://localhost:5173 (Vite proxies /api to the API,
 npm test                  # unit + screen tests
 npm run build             # type-check and production build into dist/
 ```
+Password-reset emails need SMTP settings (see `server/.env.example`); without them the reset link is printed in the server console during development.
 Production: set `VITE_API_URL` (client) to the public API URL, and `CLIENT_URL` + `COOKIE_DOMAIN` (server) so the cookie works across the two subdomains.
 
 ## How money works
