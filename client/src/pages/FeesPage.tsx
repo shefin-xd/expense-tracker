@@ -32,7 +32,7 @@ function History({ feeId, onClose }: { feeId: string; onClose: () => void }) {
         <StatusBadge status={fee.status} />
       </div>
       {fee.payments.length ? (
-        <ul className="divide-y rounded-md border">
+        <ul className="divide-y overflow-hidden rounded-2xl bg-surface shadow-card">
           {fee.payments.map((p) => (
             <li key={p.id} className="flex items-center gap-2 py-2 pl-3 pr-1.5">
               <div className="min-w-0 flex-1"><p className="text-sm font-medium"><Money paise={p.amountPaise} /></p><p className="truncate text-[13px] text-muted">{formatDate(p.date, fmt)}{p.referenceNo ? ` · Ref ${p.referenceNo}` : ''}{p.notes ? ` · ${p.notes}` : ''}</p></div>
@@ -40,7 +40,7 @@ function History({ feeId, onClose }: { feeId: string; onClose: () => void }) {
             </li>
           ))}
         </ul>
-      ) : <p className="rounded-md border border-dashed px-4 py-6 text-center text-[13px] text-muted">No payments recorded for this fee yet.</p>}
+      ) : <p className="rounded-xl bg-fill px-4 py-6 text-center text-[13px] text-muted">No payments recorded for this fee yet.</p>}
       <div className="flex justify-end"><Button variant="secondary" onClick={onClose}>Close</Button></div>
       <ConfirmDialog open={!!removing} title="Remove this payment?" message="The amount returns to your balance and the fee shows it as unpaid again." confirmLabel="Remove payment" onConfirm={() => del.mutateAsync(removing!)} onClose={() => setRemoving(null)} />
     </div>
@@ -77,7 +77,7 @@ export default function FeesPage() {
             {q.data.items.map((x) => {
               const pct = Math.min(100, Math.floor((x.paidPaise * 100) / x.totalPaise));
               return (
-                <li key={x.id} className="rounded-md border p-4">
+                <li key={x.id} className="rounded-2xl bg-surface p-4 shadow-card">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{x.title}</p>
@@ -85,7 +85,7 @@ export default function FeesPage() {
                     </div>
                     <div className="flex shrink-0 items-center gap-1"><StatusBadge status={x.status} /><RowActions name={x.title} onEdit={() => setModal({ kind: 'edit', fee: x })} onDelete={() => setModal({ kind: 'delete', fee: x })} /></div>
                   </div>
-                  <div className="mt-4"><ProgressBar percent={pct} level={x.status === 'overdue' ? 'over' : 'ok'} label={`${x.title} paid`} /></div>
+                  <div className="mt-4"><ProgressBar percent={pct} level={x.status === 'paid' ? 'done' : x.status === 'overdue' ? 'over' : 'ok'} label={`${x.title} paid`} /></div>
                   <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 text-[13px] text-muted">
                     <span><Money paise={x.paidPaise} /> paid of <Money paise={x.totalPaise} /></span>
                     <span className="font-medium text-text">{x.remainingPaise > 0 ? <><Money paise={x.remainingPaise} /> left</> : 'Fully paid'}</span>

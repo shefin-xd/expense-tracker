@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
+import { idempotent } from '../middleware/idempotency';
 import { bodyOf, queryOf, validateBody, validateQuery } from '../middleware/validate';
 import { addPayment, completeFee, createFee, deleteFee, deletePayment, getFee, listFees, updateFee } from '../services/fee.service';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -7,7 +8,7 @@ import { ok, parseId } from '../utils/http';
 import { feeCreateSchema, feeListSchema, feeUpdateSchema, paymentSchema } from '../validators/fee.validators';
 
 export const feeRouter = Router();
-feeRouter.use(requireAuth);
+feeRouter.use(requireAuth, idempotent);
 
 feeRouter.get('/', validateQuery(feeListSchema), asyncHandler(async (req, res) => {
   const { items, meta } = await listFees(req.userId!, queryOf(res, feeListSchema));

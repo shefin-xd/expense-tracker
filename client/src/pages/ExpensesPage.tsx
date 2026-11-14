@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { RowActions } from '@/components/RowActions';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Confirm';
-import { FilterDate, FilterSelect } from '@/components/ui/Field';
+import { FilterBar, FilterDate, FilterSelect } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { Money, PageHeader, Pagination } from '@/components/ui/Parts';
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/States';
 import { CategoryManager } from '@/features/expenses/CategoryManager';
 import { ExpenseForm } from '@/features/expenses/forms';
+import { RecurringPanel } from '@/features/recurring/RecurringPanel';
 import { useDateFormat } from '@/hooks/useUser';
 import { useDebounced } from '@/hooks/useDebounced';
 import { api } from '@/services/api';
@@ -38,22 +39,24 @@ export default function ExpensesPage() {
     <>
       <PageHeader title="Expenses" description="What you spent, and where."
         actions={<><Button variant="secondary" onClick={() => setModal({ kind: 'categories' })}><Tags className="size-4" aria-hidden />Categories</Button><Button onClick={() => setModal({ kind: 'add' })}><Plus className="size-4" aria-hidden />Add expense</Button></>} />
-      <div className="mb-4 flex flex-wrap gap-2">
-        <div className="relative min-w-48 flex-1">
+      <RecurringPanel kind="expense" />
+
+      <FilterBar>
+        <div className="relative min-w-[13rem] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
-          <input type="search" aria-label="Search expenses" placeholder="Search expenses" value={f.search} onChange={(ev) => set({ search: ev.target.value })} className="h-9 w-full rounded-md border border-border-strong bg-bg pl-9 pr-3 text-sm focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30" />
+          <input type="search" aria-label="Search expenses" placeholder="Search expenses" value={f.search} onChange={(ev) => set({ search: ev.target.value })} className="h-10 w-full rounded-[10px] bg-fill pl-9 pr-3 text-[15px] placeholder:text-faint focus:outline-none focus:ring-[3px] focus:ring-accent/40" />
         </div>
         <FilterSelect label="Category" value={f.category} onChange={(ev) => set({ category: ev.target.value })}><option value="">All categories</option>{names.map((n) => <option key={n}>{n}</option>)}</FilterSelect>
         <FilterSelect label="Payment method" value={f.method} onChange={(ev) => set({ method: ev.target.value })}><option value="">Any method</option>{PAYMENT_METHODS.map((m) => <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}</FilterSelect>
         <FilterDate label="From date" value={f.from} onChange={(ev) => set({ from: ev.target.value })} />
         <FilterDate label="To date" value={f.to} onChange={(ev) => set({ to: ev.target.value })} />
         <FilterSelect label="Sort" value={f.sort} onChange={(ev) => set({ sort: ev.target.value as keyof typeof SORTS })}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="highest">Highest amount</option><option value="lowest">Lowest amount</option></FilterSelect>
-      </div>
+      </FilterBar>
       {bad && <p role="alert" className="mb-3 text-[13px] text-danger">The start date must be on or before the end date.</p>}
 
       {q.isPending ? <ListSkeleton /> : q.isError ? <ErrorState message={q.error.message} onRetry={() => q.refetch()} />
         : q.data.items.length ? (
-          <ul className="divide-y rounded-md border">
+          <ul className="divide-y overflow-hidden rounded-2xl bg-surface shadow-card">
             {q.data.items.map((x) => (
               <li key={x.id} className="flex items-center gap-2 py-2 pl-4 pr-2">
                 <button onClick={() => setModal({ kind: 'view', item: x })} className="min-w-0 flex-1 py-1 text-left">

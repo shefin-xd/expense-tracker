@@ -3,7 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
-import { env, isProd } from './config/env';
+import { allowedOrigins, env, isProd } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { apiRouter } from './routes';
 
@@ -13,8 +13,8 @@ export function createApp() {
   app.disable('x-powered-by');
 
   app.use(helmet());
-  // A trailing slash in CLIENT_URL must not break CORS: browsers send the origin without one.
-  app.use(cors({ origin: env.CLIENT_URL.replace(/\/+$/, ''), credentials: true }));
+  // Only the app and the sign-in app may call the API with cookies.
+  app.use(cors({ origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)), credentials: true }));
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
 

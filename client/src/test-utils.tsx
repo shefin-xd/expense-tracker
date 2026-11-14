@@ -9,13 +9,13 @@ type Handler = (req: { method: string; path: string; query: URLSearchParams; bod
 
 /** Replaces fetch with a tiny in-memory API so screens can be tested without a server. */
 export function mockApi(handler: Handler) {
-  const calls: { method: string; path: string; body: any }[] = [];
+  const calls: { method: string; path: string; body: any; headers: Record<string, string> }[] = [];
   globalThis.fetch = (async (url: string, init: RequestInit = {}) => {
     const u = new URL(url, 'http://localhost');
     const path = u.pathname.replace(/^\/api/, '');
     const method = init.method ?? 'GET';
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
-    calls.push({ method, path, body });
+    calls.push({ method, path, body, headers: (init.headers ?? {}) as Record<string, string> });
     const r = handler({ method, path, query: u.searchParams, body }) ?? { status: 404, error: { code: 'NOT_FOUND', message: 'Not found' } };
     const status = r.status ?? 200;
     return new Response(JSON.stringify(status < 400 ? { success: true, data: r.data ?? null, ...(r.meta ? { meta: r.meta } : {}) } : { success: false, error: r.error }), { status, headers: { 'Content-Type': 'application/json' } });

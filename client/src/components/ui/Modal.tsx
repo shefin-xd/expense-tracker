@@ -2,11 +2,10 @@ import clsx from 'clsx';
 import { X } from 'lucide-react';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { IconButton } from './Button';
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
-/** Centered dialog on desktop, bottom sheet on phones. Traps focus, closes on Esc or backdrop click. */
+/** iOS sheet: slides up from the bottom on phones (with a grabber), a centered card on larger screens. */
 export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -19,7 +18,7 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const first = ref.current?.querySelector<HTMLElement>('input,select,textarea') ?? ref.current?.querySelector<HTMLElement>(FOCUSABLE);
-    first?.focus();
+    first?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current(); return; }
       if (e.key !== 'Tab' || !ref.current) return;
@@ -35,15 +34,16 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
 
   if (!open) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="absolute inset-0 bg-black/50" aria-hidden />
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="cl-fade absolute inset-0 bg-black/40" aria-hidden />
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className={clsx('cl-pop relative flex max-h-[92dvh] w-full flex-col rounded-t-md border border-border bg-bg shadow-lg sm:rounded-md', wide ? 'sm:max-w-2xl' : 'sm:max-w-md')}>
-        <div className="flex items-center justify-between border-b px-5 py-3.5">
-          <h2 id={titleId} className="text-[15px] font-semibold">{title}</h2>
-          <IconButton label="Close" onClick={onClose} className="-mr-2"><X className="size-4" /></IconButton>
+        className={clsx('cl-sheet sm:cl-dialog relative flex max-h-[92dvh] w-full flex-col rounded-t-[20px] bg-bg shadow-sheet sm:max-h-[88dvh] sm:rounded-[20px]', wide ? 'sm:max-w-2xl' : 'sm:max-w-md')}>
+        <div aria-hidden className="mx-auto mt-2 h-[5px] w-9 shrink-0 rounded-full bg-fill-strong sm:hidden" />
+        <div className="relative flex shrink-0 items-center justify-center px-14 pb-3 pt-3 sm:pt-4">
+          <h2 id={titleId} className="truncate text-[17px] font-semibold">{title}</h2>
+          <button aria-label="Close" onClick={onClose} className="absolute right-4 top-3 grid size-8 place-items-center rounded-full bg-fill-strong text-muted active:opacity-70 sm:top-3.5"><X className="size-4" strokeWidth={2.5} /></button>
         </div>
-        <div className="overflow-y-auto px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">{children}</div>
+        <div className="overflow-y-auto overscroll-contain px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1 sm:px-6 sm:pb-6">{children}</div>
       </div>
     </div>,
     document.body,

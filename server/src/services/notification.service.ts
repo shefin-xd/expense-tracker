@@ -2,11 +2,13 @@ import { Types } from 'mongoose';
 import { Fee } from '../models/Fee';
 import { Loan } from '../models/Loan';
 import { Notification, type NOTIFICATION_TYPES } from '../models/Notification';
+import { Recurring } from '../models/Recurring';
 import { User } from '../models/User';
 import { currentMonthIST } from '../utils/dates';
 import { notFound } from '../utils/errors';
 import { formatINR } from '../utils/money';
 import { getBudgetProgress } from './budget.service';
+import { recurringState } from './recurring.rules';
 import { feeStatus, loanStatus } from './status.rules';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -37,6 +39,17 @@ export async function syncNotifications(userId: string, now = new Date()) {
       const amt = formatINR(l.amountPaise - l.repaidPaise);
       if (st === 'overdue') drafts.push({ type: 'repayment_due', title: 'Repayment overdue', message: `${who} ${amt}. The expected date has passed.`, dedupeKey: `loan:${l._id}:overdue` });
       else if (l.expectedDate.getTime() - now.getTime() <= SOON_DAYS * DAY) drafts.push({ type: 'repayment_due', title: 'Repayment due soon', message: `${who} ${amt} within ${SOON_DAYS} days.`, dedupeKey: `loan:${l._id}:soon` });
+    }
+  }
+
+  if (prefs?.recurring !== false) {
+    for (const r of await Recurring.find({ userId, active: true })) {
+      const st = recurringState(r, now);
+      if (!st.due) continue;
+      drafts.push({
+        type: 'recurring_due', title: r.kind === 'income' ? 'Money expected' : 'Payment due',
+        message: `${r.name}: ${formatINR(r.amountPaise)} is due this month. Confirm it to record it.`, dedupeKey: `recurring:${r._id}:${st.month}`,
+      });
     }
   }
 

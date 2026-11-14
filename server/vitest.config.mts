@@ -11,6 +11,7 @@ export default defineConfig({
       MONGODB_URI: 'mongodb://127.0.0.1:27017/campusledger-test',
       JWT_SECRET: 'test-secret-test-secret-test-secret-123',
       CLIENT_URL: 'http://localhost:5173',
+      AUTH_URL: 'http://localhost:5174',
     },
   },
 });

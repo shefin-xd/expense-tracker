@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const manifestPath = join(here, 'source-manifest.txt');
-const roots = ['client/src', 'server/src'];
+const roots = ['client/src', 'auth/src', 'server/src'];
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', cwd: join(here, '..') }).split('\n').map((l) => l.trim()).filter(Boolean);
 
 if (process.argv.includes('--update')) {

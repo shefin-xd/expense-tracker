@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppRoutes } from './App';
-import { ForgotPasswordPage, LoginPage, ResetPasswordPage } from './features/auth/AuthPages';
 import { RequireAuth } from './features/auth/RequireAuth';
 import { ExpenseForm } from './features/expenses/forms';
 import { FeeForm, PaymentForm } from './features/fees/forms';
 import { Modal } from './components/ui/Modal';
+import { nav, AUTH_URL } from './utils/auth';
+import { RecurringPanel } from './features/recurring/RecurringPanel';
 import { mockApi, renderWithProviders, USER } from './test-utils';
 import { Toaster } from './components/ui/Toaster';
 import type { Fee } from './types/api';
@@ -24,38 +24,43 @@ const signedIn = (extra?: Parameters<typeof mockApi>[0]) =>
   });
 
 describe('route protection', () => {
-  it('sends signed-out visitors to the login page', async () => {
+  const replace = vi.spyOn(nav, 'replace').mockImplementation(() => undefined);
+  const go = vi.spyOn(nav, 'go').mockImplementation(() => undefined);
+  beforeEach(() => { replace.mockClear(); go.mockClear(); });
+
+  it('sends signed-out visitors to the separate sign-in app, remembering where they were going', async () => {
     mockApi((r) => (r.path === '/auth/me' ? { status: 401, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } } : undefined));
     renderWithProviders(<AppRoutes />, { route: '/expenses' });
-    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    const url = new URL(replace.mock.calls[0]![0]);
+    expect(url.origin + url.pathname).toBe(`${AUTH_URL}/login`);
+    expect(url.searchParams.get('redirect')).toContain(window.location.origin);
+    expect(screen.queryByText('Available balance')).not.toBeInTheDocument();
   });
-  it('sends signed-in users away from the login page', async () => {
-    signedIn((r) => (r.path === '/dashboard' ? { data: { balance: { currentPaise: 0, lentOutstandingPaise: 0, borrowedOutstandingPaise: 0 }, range: { totalIncomePaise: 0, totalExpensesPaise: 0 }, allTime: { totalIncomePaise: 0, totalExpensesPaise: 0 }, totalSavingsPaise: 0, spendingSeries: [], categoryBreakdown: [], recentTransactions: [], upcoming: { fees: [], repayments: [] } } } : undefined));
-    renderWithProviders(<AppRoutes />, { route: '/login' });
-    expect(await screen.findByText('Available balance')).toBeInTheDocument();
-  });
-  it('shows a retry state, not the login page, when the server is down', async () => {
+
+  it('shows a retry state, not a redirect, when the server is down', async () => {
     mockApi((r) => (r.path === '/auth/me' ? { status: 500, error: { code: 'INTERNAL', message: 'Something went wrong' } } : undefined));
-    renderWithProviders(<Routes><Route element={<RequireAuth />}><Route index element={<p>secret</p>} /></Route></Routes>);
+    renderWithProviders(<AppRoutes />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load this');
-    expect(screen.queryByText('secret')).not.toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('signing out ends the session, then goes to the sign-in app with a signed-out notice', async () => {
+    const user = userEvent.setup();
+    const calls = signedIn((r) => (r.path === '/auth/logout' ? { data: null } : r.path === '/dashboard' ? { data: EMPTY_DASH } : undefined));
+    Object.defineProperty(window, 'innerWidth', { value: 1400, configurable: true });
+    renderWithProviders(<AppRoutes />);
+    const signOutButtons = await screen.findAllByRole('button', { name: 'Sign out' });
+    await user.click(signOutButtons[signOutButtons.length - 1]!);
+    await waitFor(() => expect(go).toHaveBeenCalled());
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/auth/logout')).toBe(true);
+    const url = new URL(go.mock.calls[0]![0]);
+    expect(url.origin + url.pathname).toBe(`${AUTH_URL}/login`);
+    expect(url.searchParams.get('signed_out')).toBe('1');
   });
 });
 
-describe('login', () => {
-  it('validates, then shows a plain error for wrong credentials', async () => {
-    const user = userEvent.setup();
-    mockApi((r) => (r.path === '/auth/login' ? { status: 401, error: { code: 'UNAUTHORIZED', message: 'Incorrect email or password' } } : undefined));
-    renderWithProviders(<LoginPage />);
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByText('Enter your email')).toBeInTheDocument();
-    expect(screen.getByText('Enter your password')).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Email'), 'a@b.com');
-    await user.type(screen.getByLabelText('Password'), 'wrong-pass1');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('do not match');
-  });
-});
+const EMPTY_DASH = { balance: { currentPaise: 0, lentOutstandingPaise: 0, borrowedOutstandingPaise: 0 }, range: { totalIncomePaise: 0, totalExpensesPaise: 0 }, allTime: { totalIncomePaise: 0, totalExpensesPaise: 0 }, totalSavingsPaise: 0, spendingSeries: [], categoryBreakdown: [], recentTransactions: [], upcoming: { fees: [], repayments: [] } };
 
 describe('dashboard', () => {
   it('shows the balance and lists from the API, with negative balances flagged', async () => {
@@ -165,57 +170,93 @@ describe('modal accessibility', () => {
   });
 });
 
-describe('forgot and reset password screens', () => {
-  const token = 'a'.repeat(64);
-  it('asks for an email, then shows the same neutral confirmation', async () => {
+describe('duplicate-proof saving', () => {
+  it('sends an Idempotency-Key, reuses it when the same values are retried after a failure, and uses a new one after success', async () => {
     const user = userEvent.setup();
-    const calls = mockApi((r) => (r.path === '/auth/forgot-password' ? { data: { message: 'ok' } } : undefined));
-    renderWithProviders(<ForgotPasswordPage />);
-    await user.click(screen.getByRole('button', { name: 'Send reset link' }));
-    expect(await screen.findByText('Enter your email')).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Email'), 'who@example.com');
-    await user.click(screen.getByRole('button', { name: 'Send reset link' }));
-    expect(await screen.findByText(/a reset link is on its way/)).toBeInTheDocument();
-    expect(calls.find((c) => c.path === '/auth/forgot-password')!.body).toEqual({ email: 'who@example.com' });
+    let attempt = 0;
+    const calls = signedIn((r) => {
+      if (r.method === 'POST' && r.path === '/expenses') return ++attempt === 1 ? { status: 500, error: { code: 'INTERNAL', message: 'Something went wrong' } } : { status: 201, data: { id: 'e1' } };
+    });
+    renderWithProviders(<><ExpenseForm quick onDone={() => {}} /><Toaster /></>);
+    await user.type(screen.getByLabelText('Amount'), '75');
+    await user.click(screen.getByRole('button', { name: 'Add expense' }));
+    await screen.findByText('Something went wrong');
+    await user.click(screen.getByRole('button', { name: 'Add expense' }));
+    await waitFor(() => expect(calls.filter((c) => c.path === '/expenses')).toHaveLength(2));
+    const [first, second] = calls.filter((c) => c.path === '/expenses');
+    expect(first!.headers['Idempotency-Key']).toMatch(/^[A-Za-z0-9_-]{8,100}$/);
+    expect(second!.headers['Idempotency-Key']).toBe(first!.headers['Idempotency-Key']);
   });
-  it('rejects mismatched or weak passwords before calling the server', async () => {
+
+  it('changed values get a new key, so a corrected form is never mistaken for the old one', async () => {
     const user = userEvent.setup();
-    const calls = mockApi(() => undefined);
-    renderWithProviders(<ResetPasswordPage />, { route: `/reset-password?token=${token}` });
-    await user.type(screen.getByLabelText('New password'), 'short');
-    await user.type(screen.getByLabelText('Confirm new password'), 'different1');
-    await user.click(screen.getByRole('button', { name: 'Change password' }));
-    expect(await screen.findByText('Use at least 8 characters')).toBeInTheDocument();
-    expect(screen.getByText('The passwords do not match')).toBeInTheDocument();
-    expect(calls).toHaveLength(0);
+    const calls = signedIn((r) => (r.method === 'POST' && r.path === '/expenses' ? { status: 500, error: { code: 'INTERNAL', message: 'Something went wrong' } } : undefined));
+    renderWithProviders(<><ExpenseForm quick onDone={() => {}} /><Toaster /></>);
+    await user.type(screen.getByLabelText('Amount'), '75');
+    await user.click(screen.getByRole('button', { name: 'Add expense' }));
+    await waitFor(() => expect(calls.filter((c) => c.path === '/expenses')).toHaveLength(1));
+    await user.clear(screen.getByLabelText('Amount'));
+    await user.type(screen.getByLabelText('Amount'), '80');
+    await user.click(screen.getByRole('button', { name: 'Add expense' }));
+    await waitFor(() => expect(calls.filter((c) => c.path === '/expenses')).toHaveLength(2));
+    const [a, b] = calls.filter((c) => c.path === '/expenses');
+    expect(b!.headers['Idempotency-Key']).not.toBe(a!.headers['Idempotency-Key']);
   });
-  it('sends the token with the new password and goes to sign in', async () => {
+});
+
+describe('monthly items', () => {
+  const due = { id: 'r1', kind: 'income', name: 'Monthly allowance', amountPaise: 800000, dayOfMonth: 1, source: 'parents', paymentMethod: 'upi', active: true, startMonth: '2026-01', due: true, month: '2026-11', nextDueDate: '2026-11-01' };
+  const upcoming = { ...due, id: 'r2', name: 'Pocket money', due: false, nextDueDate: '2026-12-01' };
+
+  it('lists items with their status and lets you confirm what actually arrived', async () => {
     const user = userEvent.setup();
-    const calls = mockApi((r) => (r.path === '/auth/reset-password' ? { data: null } : undefined));
-    renderWithProviders(<><Routes><Route path="/reset-password" element={<ResetPasswordPage />} /><Route path="/login" element={<p>login page</p>} /></Routes><Toaster /></>, { route: `/reset-password?token=${token}` });
-    await user.type(screen.getByLabelText('New password'), 'BrandNew123');
-    await user.type(screen.getByLabelText('Confirm new password'), 'BrandNew123');
-    await user.click(screen.getByRole('button', { name: 'Change password' }));
-    expect(await screen.findByText('login page')).toBeInTheDocument();
-    expect(calls.find((c) => c.path === '/auth/reset-password')!.body).toEqual({ token, password: 'BrandNew123' });
+    const calls = signedIn((r) => {
+      if (r.path === '/recurring' && r.method === 'GET') return { data: { items: [due, upcoming], dueCount: 1 } };
+      if (r.path === '/recurring/r1/confirm') return { status: 201, data: {} };
+    });
+    renderWithProviders(<RecurringPanel kind="income" />);
+    expect(await screen.findByText('Due now')).toBeInTheDocument();
+    expect(screen.getByText('Pocket money')).toBeInTheDocument();
+    expect(screen.getByText('Upcoming')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Confirm received' }));
+    const dialog = await screen.findByRole('dialog');
+    const amount = within(dialog).getByLabelText('Amount received');
+    expect(amount).toHaveValue('8000');
+    await user.clear(amount);
+    await user.type(amount, '6500.50');
+    await user.click(within(dialog).getByRole('button', { name: 'Record money' }));
+    await waitFor(() => expect(calls.some((c) => c.path === '/recurring/r1/confirm')).toBe(true));
+    expect(calls.find((c) => c.path === '/recurring/r1/confirm')!.body).toMatchObject({ amount: '6500.50' });
   });
-  it('offers a new link when the old one has expired, and when the link is malformed', async () => {
+
+  it('skip records nothing and calls the skip endpoint', async () => {
     const user = userEvent.setup();
-    mockApi((r) => (r.path === '/auth/reset-password' ? { status: 400, error: { code: 'BAD_REQUEST', message: 'This reset link has expired or was already used. Ask for a new one.' } } : undefined));
-    const first = renderWithProviders(<ResetPasswordPage />, { route: `/reset-password?token=${token}` });
-    await user.type(screen.getByLabelText('New password'), 'BrandNew123');
-    await user.type(screen.getByLabelText('Confirm new password'), 'BrandNew123');
-    await user.click(screen.getByRole('button', { name: 'Change password' }));
-    expect(await screen.findByRole('link', { name: 'Get a new link' })).toBeInTheDocument();
-    first.unmount();
-    renderWithProviders(<ResetPasswordPage />, { route: '/reset-password?token=oops' });
-    expect(screen.getByRole('heading', { name: 'This link is not valid' })).toBeInTheDocument();
+    const calls = signedIn((r) => (r.path === '/recurring' && r.method === 'GET' ? { data: { items: [due], dueCount: 1 } } : r.path === '/recurring/r1/skip' ? { data: {} } : undefined));
+    renderWithProviders(<RecurringPanel kind="income" />);
+    await user.click(await screen.findByRole('button', { name: 'Skip this month' }));
+    await waitFor(() => expect(calls.some((c) => c.path === '/recurring/r1/skip')).toBe(true));
+    expect(calls.some((c) => c.path === '/recurring/r1/confirm')).toBe(false);
   });
-  it('is reachable while signed out, and the login page links to it', async () => {
-    mockApi((r) => (r.path === '/auth/me' ? { status: 401, error: { code: 'UNAUTHORIZED', message: 'x' } } : undefined));
-    renderWithProviders(<AppRoutes />, { route: '/reset-password?token=zzz' });
-    expect(await screen.findByRole('heading', { name: 'This link is not valid' })).toBeInTheDocument();
-    renderWithProviders(<LoginPage />);
-    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password');
+
+  it('explains the idea when there are none yet', async () => {
+    signedIn((r) => (r.path === '/recurring' ? { data: { items: [], dueCount: 0 } } : undefined));
+    renderWithProviders(<RecurringPanel kind="income" />);
+    expect(await screen.findByText(/you confirm what actually arrived/)).toBeInTheDocument();
+  });
+
+  it('the dashboard shows due items and a getting-started checklist for new users', async () => {
+    signedIn((r) => {
+      if (r.path === '/dashboard') return { data: EMPTY_DASH };
+      if (r.path === '/recurring') return { data: { items: [due], dueCount: 1 } };
+      if (r.path === '/fees') return { data: [], meta: { page: 1, limit: 1, total: 0, totalPages: 1 } };
+      if (r.path.startsWith('/budgets/') && !r.path.endsWith('/compare')) return { data: { month: '2026-11', hasBudget: false, overall: null, categories: [], spentPaise: 0, spendingByCategory: [] } };
+    });
+    renderWithProviders(<AppRoutes />);
+    expect(await screen.findByText('Waiting for you', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText(/Getting started · 1 of 4/, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText('Add the money you have')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Hide getting started' }));
+    expect(screen.queryByText(/Getting started/)).not.toBeInTheDocument();
+    expect(localStorage.getItem('cl-onboarding-dismissed')).toBe('1');
   });
 });

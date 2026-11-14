@@ -18,7 +18,8 @@ describe('forgot and reset password', () => {
     expect(res.status).toBe(200);
     expect(outbox).toHaveLength(1);
     expect(outbox[0]!.to).toBe(email);
-    expect(outbox[0]!.text).toContain('http://localhost:5173/reset-password?token=');
+    // the link points at the separate sign-in app (AUTH_URL), not the expenses app
+    expect(outbox[0]!.text).toContain('http://localhost:5174/reset-password?token=');
     expect(outbox[0]!.html).toContain('reset-password?token=');
     const token = tokenFrom(outbox[0]!);
     const stored = await PasswordReset.find();

@@ -22,6 +22,8 @@ services:
         generateValue: true
       - key: CLIENT_URL
         value: https://expenses.shefin.dev
+      - key: AUTH_URL                # the separate sign-in app
+        value: https://auth.shefin.dev
       - key: COOKIE_DOMAIN
         value: .shefin.dev
       - key: EMAIL_FROM              # must be an address on a domain verified in Mailtrap

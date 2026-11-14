@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
+import { idempotent } from '../middleware/idempotency';
 import { bodyOf, queryOf, validateBody, validateQuery } from '../middleware/validate';
 import { createIncome, deleteIncome, getIncome, listIncome, parentAllowanceSummary, updateIncome } from '../services/income.service';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -7,7 +8,7 @@ import { ok, parseId } from '../utils/http';
 import { incomeCreateSchema, incomeListSchema, incomeUpdateSchema } from '../validators/income.validators';
 
 export const incomeRouter = Router();
-incomeRouter.use(requireAuth);
+incomeRouter.use(requireAuth, idempotent);
 
 incomeRouter.get('/parent-summary', asyncHandler(async (req, res) => ok(res, await parentAllowanceSummary(req.userId!))));
 incomeRouter.get('/', validateQuery(incomeListSchema), asyncHandler(async (req, res) => {

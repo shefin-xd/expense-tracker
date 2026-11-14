@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
+import { idempotent } from '../middleware/idempotency';
 import { bodyOf, queryOf, validateBody, validateQuery } from '../middleware/validate';
 import { addRepayment, createLoan, deleteLoan, deleteRepayment, getLoan, listLoans, loanTotals, updateLoan, type Direction } from '../services/loan.service';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -9,7 +10,7 @@ import { loanCreateSchema, loanListSchema, loanUpdateSchema, repaymentSchema } f
 /** Mounted twice: /api/lending (money I lent) and /api/borrowing (money I borrowed). */
 export function makeLoanRouter(direction: Direction) {
   const r = Router();
-  r.use(requireAuth);
+  r.use(requireAuth, idempotent);
   r.get('/summary', asyncHandler(async (req, res) => ok(res, await loanTotals(req.userId!, direction))));
   r.get('/', validateQuery(loanListSchema), asyncHandler(async (req, res) => {
     const { items, meta } = await listLoans(req.userId!, direction, queryOf(res, loanListSchema));

@@ -21,14 +21,14 @@ export function CategoryManager() {
         <Button type="submit" loading={add.isPending} disabled={!name.trim()}>Add</Button>
       </form>
       <div>
-        <h3 className="mb-2 text-[13px] font-medium">Your categories</h3>
+        <h3 className="mb-1.5 px-1 text-[13px] font-medium uppercase tracking-wide text-muted">Your categories</h3>
         {cats.data?.custom.length ? (
-          <ul className="divide-y rounded-md border">
+          <ul className="divide-y overflow-hidden rounded-2xl bg-surface shadow-card">
             {cats.data.custom.map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                 {editing?.id === c.id ? (
                   <form className="flex flex-1 items-center gap-1" onSubmit={(e) => { e.preventDefault(); if (editing.name.trim()) rename.mutate({ id: c.id, name: editing.name.trim() }); }}>
-                    <input aria-label="Category name" autoFocus value={editing.name} maxLength={40} onChange={(e) => setEditing({ id: c.id, name: e.target.value })} className="h-8 flex-1 rounded-md border border-border-strong bg-bg px-2 text-sm" />
+                    <input aria-label="Category name" autoFocus value={editing.name} maxLength={40} onChange={(e) => setEditing({ id: c.id, name: e.target.value })} className="h-9 flex-1 rounded-[10px] bg-fill px-3 text-[15px] focus:outline-none focus:ring-[3px] focus:ring-accent/40" />
                     <IconButton label="Save name" type="submit"><Check className="size-4" /></IconButton>
                     <IconButton label="Cancel" onClick={() => setEditing(null)}><X className="size-4" /></IconButton>
                   </form>

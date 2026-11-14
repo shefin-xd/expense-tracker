@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
+import { idempotent } from '../middleware/idempotency';
 import { bodyOf, queryOf, validateBody, validateQuery } from '../middleware/validate';
 import { createExpense, deleteExpense, getExpense, listExpenses, updateExpense } from '../services/expense.service';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -7,7 +8,7 @@ import { ok, parseId } from '../utils/http';
 import { expenseCreateSchema, expenseListSchema, expenseUpdateSchema } from '../validators/expense.validators';
 
 export const expenseRouter = Router();
-expenseRouter.use(requireAuth);
+expenseRouter.use(requireAuth, idempotent);
 
 expenseRouter.get('/', validateQuery(expenseListSchema), asyncHandler(async (req, res) => {
   const { items, meta } = await listExpenses(req.userId!, queryOf(res, expenseListSchema));

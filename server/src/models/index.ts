@@ -7,6 +7,7 @@ import { LedgerEntry } from './LedgerEntry';
 import { Loan } from './Loan';
 import { Notification } from './Notification';
 import { PasswordReset } from './PasswordReset';
+import { Recurring } from './Recurring';
 import { SavingsGoal } from './SavingsGoal';
 
 /** Every collection that stores a user's private data. Used for export and account deletion. */
@@ -22,4 +23,5 @@ export const USER_OWNED = {
   notifications: Notification,
   ledger: LedgerEntry,
   passwordResets: PasswordReset,
+  recurring: Recurring,
 } as const;

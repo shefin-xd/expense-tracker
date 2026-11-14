@@ -2,7 +2,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
 import { SelectInput, TextInput, Toggle } from '@/components/ui/Field';
@@ -14,6 +13,7 @@ import { errorMessage, useSave } from '@/services/queries';
 import { useThemeStore } from '@/store/theme';
 import { toast } from '@/store/toast';
 import { STUDENT_YEARS, type Theme, type User } from '@/types/api';
+import { nav, registerUrl } from '@/utils/auth';
 import type { DateFormatPref } from '@/utils/date';
 
 const profileSchema = z.object({
@@ -72,6 +72,7 @@ function PreferencesSection({ user }: { user: User }) {
         <div className="divide-y">
           <Toggle label="Fee deadlines" description="Fees due within 7 days and overdue fees" checked={n.feeDeadlines !== false} onChange={(v) => patch.mutate({ preferences: { notifications: { feeDeadlines: v } } })} />
           <Toggle label="Budget warnings" description="When a budget reaches 80% or goes over" checked={n.budgetWarnings !== false} onChange={(v) => patch.mutate({ preferences: { notifications: { budgetWarnings: v } } })} />
+          <Toggle label="Monthly items" description="When your allowance or a monthly payment is due to confirm" checked={n.recurring !== false} onChange={(v) => patch.mutate({ preferences: { notifications: { recurring: v } } })} />
           <Toggle label="Repayment dates" description="Money you lent or borrowed that is due soon or late" checked={n.repayments !== false} onChange={(v) => patch.mutate({ preferences: { notifications: { repayments: v } } })} />
         </div>
       </Panel>
@@ -103,7 +104,6 @@ function PasswordSection() {
 
 function DataSection() {
   const qc = useQueryClient();
-  const nav = useNavigate();
   const [confirm, setConfirm] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -119,7 +119,7 @@ function DataSection() {
   });
   const remove = useMutation({
     mutationFn: () => api.del('/users/me', { password }),
-    onSuccess: () => { qc.clear(); nav('/register', { replace: true }); toast.success('Your account and all its data were deleted'); },
+    onSuccess: () => { qc.clear(); nav.go(registerUrl()); },
     onError: (e) => setError(errorMessage(e)),
   });
   return (

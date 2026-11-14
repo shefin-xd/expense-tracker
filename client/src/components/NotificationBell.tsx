@@ -26,25 +26,25 @@ export function NotificationBell() {
   return (
     <div ref={ref} className="relative">
       <IconButton label={unread ? `Notifications, ${unread} unread` : 'Notifications'} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <Bell className="size-[18px]" />
-        {unread > 0 && <span aria-hidden className="absolute right-1.5 top-1.5 size-2 rounded-full bg-accent ring-2 ring-bg" />}
+        <Bell className="size-[21px]" />
+        {unread > 0 && <span aria-hidden className="absolute right-2 top-2 size-2.5 rounded-full bg-danger ring-2 ring-bg" />}
       </IconButton>
       {open && (
-        <div role="region" aria-label="Notifications" className="cl-pop fixed inset-x-3 top-14 z-40 rounded-md border bg-bg shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-96">
-          <div className="flex items-center justify-between border-b px-4 py-2.5">
-            <h2 className="text-sm font-semibold">Notifications</h2>
-            {unread > 0 && <button onClick={() => readAll.mutate(undefined)} className="text-[13px] font-medium text-accent underline underline-offset-4">Mark all as read</button>}
+        <div role="region" aria-label="Notifications" className="cl-dialog fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-40 overflow-hidden rounded-[18px] bg-surface shadow-[0_12px_40px_rgba(0,0,0,0.22)] ring-1 ring-black/5 sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-96 dark:ring-white/10">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <h2 className="text-[17px] font-semibold">Notifications</h2>
+            {unread > 0 && <button onClick={() => readAll.mutate(undefined)} className="text-[15px] text-accent active:opacity-60">Mark all read</button>}
           </div>
-          <ul className="max-h-[60dvh] divide-y overflow-y-auto">
+          <ul className="max-h-[60dvh] divide-y overflow-y-auto overscroll-contain">
             {data?.items.length ? data.items.map((n) => (
               <li key={n.id}>
-                <button onClick={() => !n.read && read.mutate(n.id)} className={clsx('block w-full px-4 py-3 text-left hover:bg-surface', n.read && 'opacity-60')}>
-                  <span className="flex items-center gap-2 text-sm font-medium">{!n.read && <span aria-label="Unread" className="size-1.5 rounded-full bg-accent" />}{n.title}</span>
-                  <span className="mt-0.5 block text-[13px] text-muted">{n.message}</span>
+                <button onClick={() => !n.read && read.mutate(n.id)} className={clsx('block w-full px-4 py-3 text-left active:bg-fill', n.read && 'opacity-55')}>
+                  <span className="flex items-center gap-2 text-[15px] font-semibold">{!n.read && <span aria-label="Unread" className="size-2 rounded-full bg-accent" />}{n.title}</span>
+                  <span className="mt-0.5 block text-[14px] text-muted">{n.message}</span>
                   <span className="mt-1 block text-xs text-muted">{formatDate(n.createdAt, fmt)}</span>
                 </button>
               </li>
-            )) : <li className="px-4 py-8 text-center text-[13px] text-muted">You are all caught up. Fee deadlines, repayments and budget warnings show up here.</li>}
+            )) : <li className="px-4 py-10 text-center text-[15px] text-muted">You are all caught up. Fee deadlines, repayments and budget warnings show up here.</li>}
           </ul>
         </div>
       )}

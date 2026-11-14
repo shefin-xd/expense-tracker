@@ -1,7 +1,7 @@
 import { Search } from 'lucide-react';
 import { useState } from 'react';
 import { TransactionList } from '@/components/TransactionList';
-import { FilterDate, FilterSelect } from '@/components/ui/Field';
+import { FilterBar, FilterDate, FilterSelect } from '@/components/ui/Field';
 import { PageHeader, Pagination } from '@/components/ui/Parts';
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/States';
 import { useDebounced } from '@/hooks/useDebounced';
@@ -26,10 +26,10 @@ export default function TransactionsPage() {
   return (
     <>
       <PageHeader title="Transactions" description="Every rupee in and out, in one place." />
-      <div className="mb-4 flex flex-wrap gap-2">
-        <div className="relative min-w-48 flex-1">
+      <FilterBar>
+        <div className="relative min-w-[13rem] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
-          <input type="search" aria-label="Search transactions" placeholder="Search by title" value={f.search} onChange={(e) => set({ search: e.target.value })} className="h-9 w-full rounded-md border border-border-strong bg-bg pl-9 pr-3 text-sm focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30" />
+          <input type="search" aria-label="Search transactions" placeholder="Search by title" value={f.search} onChange={(e) => set({ search: e.target.value })} className="h-10 w-full rounded-[10px] bg-fill pl-9 pr-3 text-[15px] placeholder:text-faint focus:outline-none focus:ring-[3px] focus:ring-accent/40" />
         </div>
         <FilterSelect label="Money in or out" value={f.type} onChange={(e) => set({ type: e.target.value, kind: '' })}><option value="">In and out</option><option value="income">Income only</option><option value="expense">Expenses only</option></FilterSelect>
         <FilterSelect label="Type" value={f.kind} onChange={(e) => set({ kind: e.target.value })}>
@@ -39,10 +39,10 @@ export default function TransactionsPage() {
         <FilterDate label="From date" value={f.from} onChange={(e) => set({ from: e.target.value })} />
         <FilterDate label="To date" value={f.to} onChange={(e) => set({ to: e.target.value })} />
         <FilterSelect label="Sort" value={f.sort} onChange={(e) => set({ sort: e.target.value as keyof typeof SORTS })}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="highest">Highest amount</option><option value="lowest">Lowest amount</option></FilterSelect>
-      </div>
+      </FilterBar>
       {bad && <p role="alert" className="mb-3 text-[13px] text-danger">The start date must be on or before the end date.</p>}
       {q.isPending ? <ListSkeleton /> : q.isError ? <ErrorState message={q.error.message} onRetry={() => q.refetch()} />
-        : q.data.items.length ? <div className="rounded-md border"><TransactionList items={q.data.items} /></div>
+        : q.data.items.length ? <div className="overflow-hidden rounded-2xl bg-surface shadow-card"><TransactionList items={q.data.items} /></div>
         : <EmptyState title={filtered ? 'No transactions match' : 'No transactions yet'} description={filtered ? 'Try removing a filter or widening the dates.' : 'Add income or an expense and it will appear here.'} />}
       <Pagination meta={q.data?.meta} onPage={(page) => set({ page })} />
     </>

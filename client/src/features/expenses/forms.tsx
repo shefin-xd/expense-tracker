@@ -51,11 +51,11 @@ export function ExpenseForm({ expense, onDone, quick }: { expense?: Expense; onD
     <form noValidate onSubmit={handleSubmit((v) => { localStorage.setItem(LAST_KEY, JSON.stringify({ category: v.category, paymentMethod: v.paymentMethod })); save.mutate(v); })} className="space-y-4">
       <AmountInput label="Amount" autoFocus error={errors.amount?.message} {...register('amount')} />
       <div>
-        <span className="mb-1.5 block text-[13px] font-medium">Category</span>
+        <span className="mb-1.5 block px-1 text-[13px] font-medium text-muted">Category</span>
         <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Category">
           {(all.length ? all : ['Food']).map((c) => (
             <button key={c} type="button" role="radio" aria-checked={category === c} onClick={() => setValue('category', c, { shouldValidate: true })}
-              className={clsx('h-8 rounded-md border px-3 text-[13px] transition-colors', category === c ? 'border-primary bg-primary text-primary-fg' : 'text-muted hover:bg-surface hover:text-text')}>{c}</button>
+              className={clsx('h-9 rounded-full px-3.5 text-[14px] font-medium transition-colors active:opacity-70', category === c ? 'bg-accent text-white' : 'bg-fill text-text')}>{c}</button>
           ))}
         </div>
         {errors.category && <p role="alert" className="mt-1.5 text-[13px] text-danger">{errors.category.message}</p>}

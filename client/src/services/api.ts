@@ -8,6 +8,16 @@ export class ApiError extends Error {
   }
 }
 
+let pendingKey: string | undefined;
+/**
+ * Runs `fn` (which must start its api call synchronously) so that the POST it makes carries an Idempotency-Key.
+ * The server then records the first result and replays it if the same key arrives again.
+ */
+export function withIdempotencyKey<T>(key: string, fn: () => T): T {
+  pendingKey = key;
+  try { return fn(); } finally { pendingKey = undefined; }
+}
+
 let onUnauthorized: (() => void) | undefined;
 /** Registered once by the app: called when any request (other than login attempts) comes back 401. */
 export const setUnauthorizedHandler = (fn: () => void) => { onUnauthorized = fn; };
@@ -22,11 +32,14 @@ const qs = (q?: Query) => {
 
 async function raw(method: string, path: string, opts: { body?: unknown; query?: Query } = {}): Promise<Response> {
   let res: Response;
+  const key = method === 'POST' ? pendingKey : undefined;
+  pendingKey = undefined;
+  const headers: Record<string, string> = { ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) };
   try {
     res = await fetch(`${BASE}/api${path}${qs(opts.query)}`, {
       method,
       credentials: 'include',
-      headers: opts.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
   } catch {

@@ -1,7 +1,7 @@
 # CampusLedger
 
 Minimal, private expense tracker for college students (MERN + TypeScript).
-`server/` is the API (Express, MongoDB, integer-paise ledger). `client/` is the React app (Vite, Tailwind, TanStack Query).
+`server/` is the API (Express, MongoDB, integer-paise ledger). `client/` is the expenses app and `auth/` is the separate sign-in app (both React + Vite + Tailwind, iOS-style design).
 **Deploying:** see [DEPLOYMENT.md](DEPLOYMENT.md) (Atlas + Render + Vercel, DNS for expenses.shefin.dev).
 
 ## Run it locally
@@ -14,15 +14,20 @@ npm test                  # first run downloads a MongoDB binary for the DB test
 npm run dev               # http://localhost:4000
 npm run seed:owner        # optional: creates the owner account from OWNER_EMAIL / OWNER_PASSWORD in .env
 
-# 2. App (new terminal)
+# 2. Sign-in app (new terminal)
+cd auth
+npm install
+npm run dev               # http://localhost:5174 (sign in, register, forgot / reset password)
+
+# 3. Expenses app (new terminal)
 cd client
 npm install
-npm run dev               # http://localhost:5173 (Vite proxies /api to the API, so cookies just work)
+npm run dev               # http://localhost:5173 (signed-out visitors are sent to :5174 and brought back)
 npm test                  # unit + screen tests
 npm run build             # type-check and production build into dist/
 ```
 Password-reset emails are sent through Mailtrap's HTTP API (set `MAILTRAP_API_TOKEN`, see `server/.env.example`); without it the reset link is printed in the server console during development.
-Production: set `VITE_API_URL` (client) to the public API URL, and `CLIENT_URL` + `COOKIE_DOMAIN` (server) so the cookie works across the two subdomains.
+Production: set `VITE_API_URL` and `VITE_AUTH_URL` (client); `VITE_API_URL` and `VITE_APP_URL` (auth); and `CLIENT_URL`, `AUTH_URL` and `COOKIE_DOMAIN` (server) so the session cookie works across the subdomains. See DEPLOYMENT.md.
 
 ## How money works
 Every money movement is one row in `LedgerEntry` (integer paise). Balance, dashboard and history are all computed from it.

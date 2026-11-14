@@ -1,7 +1,7 @@
 import { Schema, model } from 'mongoose';
 import { jsonOpts } from './json';
 
-export const NOTIFICATION_TYPES = ['fee_due_soon', 'fee_overdue', 'budget_warning', 'repayment_due', 'export_ready'] as const;
+export const NOTIFICATION_TYPES = ['fee_due_soon', 'fee_overdue', 'budget_warning', 'repayment_due', 'recurring_due', 'export_ready'] as const;
 
 const notificationSchema = new Schema(
   {

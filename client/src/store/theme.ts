@@ -5,7 +5,7 @@ import type { Theme } from '@/types/api';
 interface ThemeState { theme: Theme; setTheme: (t: Theme) => void }
 
 export const useThemeStore = create<ThemeState>()(
-  persist((set) => ({ theme: 'light', setTheme: (theme) => set({ theme }) }), { name: 'cl-theme' }),
+  persist((set) => ({ theme: 'system', setTheme: (theme) => set({ theme }) }), { name: 'cl-theme' }),
 );
 
 export const isDark = (t: Theme) => t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);

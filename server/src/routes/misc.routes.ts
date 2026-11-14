@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { refreshSession } from '../controllers/auth.controller';
 import { COOKIE_NAME, requireAuth } from '../middleware/auth';
+import { idempotent } from '../middleware/idempotency';
 import { bodyOf, queryOf, validateBody, validateQuery } from '../middleware/validate';
 import { createCategory, deleteCategory, listCategories, renameCategory } from '../services/category.service';
 import { getDashboard } from '../services/dashboard.service';
@@ -13,7 +14,7 @@ import { ok, parseId } from '../utils/http';
 import { accountDeleteSchema, categoryNameSchema, dashboardSchema, passwordChangeSchema, profileUpdateSchema, transactionListSchema } from '../validators/misc.validators';
 import { getSummary } from '../services/ledger.service';
 
-const protectedRouter = () => Router().use(requireAuth);
+const protectedRouter = () => Router().use(requireAuth, idempotent);
 
 export const transactionRouter = protectedRouter();
 transactionRouter.get('/', validateQuery(transactionListSchema), asyncHandler(async (req, res) => {

@@ -34,7 +34,7 @@ export const profileUpdateSchema = z
         theme: z.enum(['light', 'dark', 'system']),
         dateFormat: z.enum(['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD']),
         currency: z.literal('INR'),
-        notifications: z.object({ feeDeadlines: z.boolean(), budgetWarnings: z.boolean(), repayments: z.boolean() }).partial(),
+        notifications: z.object({ feeDeadlines: z.boolean(), budgetWarnings: z.boolean(), repayments: z.boolean(), recurring: z.boolean() }).partial(),
       })
       .partial(),
   })

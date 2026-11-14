@@ -25,18 +25,18 @@ export default function SavingsPage() {
       <PageHeader title="Savings" description="Goals you are putting money towards." actions={<Button onClick={() => setModal({ kind: 'add' })}><Plus className="size-4" aria-hidden />Add goal</Button>} />
       {q.isPending ? <ListSkeleton rows={3} /> : q.isError ? <ErrorState message={q.error.message} onRetry={() => q.refetch()} /> : q.data.goals.length ? (
         <>
-          <dl className="mb-6 grid grid-cols-2 gap-4 rounded-md border p-4">
+          <dl className="mb-6 grid grid-cols-2 gap-4 rounded-2xl bg-surface p-4 shadow-card">
             <Stat label="Saved so far" value={<Money paise={q.data.totalSavedPaise} decimals={false} />} />
             <Stat label="Combined target" value={<Money paise={q.data.totalTargetPaise} decimals={false} />} />
           </dl>
           <ul className="space-y-3">
             {q.data.goals.map((g) => (
-              <li key={g.id} className="rounded-md border p-4">
+              <li key={g.id} className="rounded-2xl bg-surface p-4 shadow-card">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0"><p className="truncate text-sm font-semibold">{g.name}</p>{(g.targetDate || g.description) && <p className="mt-0.5 text-[13px] text-muted">{[g.targetDate && `Target ${formatDate(g.targetDate, fmt)}`, g.description].filter(Boolean).join(' · ')}</p>}</div>
                   <RowActions name={g.name} onEdit={() => setModal({ kind: 'edit', goal: g })} onDelete={() => setModal({ kind: 'delete', goal: g })} />
                 </div>
-                <div className="mt-4"><ProgressBar percent={g.percentSaved} label={`${g.name} saved`} /></div>
+                <div className="mt-4"><ProgressBar percent={g.percentSaved} level={g.reached ? 'done' : 'ok'} label={`${g.name} saved`} /></div>
                 <div className="mt-2 flex justify-between gap-4 text-[13px] text-muted">
                   <span><Money paise={g.savedPaise} /> of <Money paise={g.targetPaise} /> · {g.percentSaved}%</span>
                   <span className="font-medium text-text">{g.reached ? 'Goal reached' : <><Money paise={g.remainingPaise} /> to go</>}</span>

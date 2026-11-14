@@ -41,7 +41,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
   const token = randomBytes(32).toString('hex');
   await PasswordReset.deleteMany({ userId: user._id }); // only the newest link works
   await PasswordReset.create({ userId: user._id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + RESET_MINUTES * 60_000) });
-  const link = `${env.CLIENT_URL.replace(/\/$/, '')}/reset-password?token=${token}`;
+  const link = `${env.AUTH_URL}/reset-password?token=${token}`;
   try {
     await sendMail({ to: user.email, ...resetEmail(user.name, link, RESET_MINUTES) });
   } catch (e) {

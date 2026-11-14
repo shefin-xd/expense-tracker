@@ -27,7 +27,7 @@ export interface User {
   id: string; name: string; email: string; college: string | null; department: string; studentYear: StudentYear; hostel: string | null;
   preferences?: {
     theme?: Theme; currency?: string; dateFormat?: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'; timezone?: string;
-    notifications?: { feeDeadlines?: boolean; budgetWarnings?: boolean; repayments?: boolean };
+    notifications?: { feeDeadlines?: boolean; budgetWarnings?: boolean; repayments?: boolean; recurring?: boolean };
   };
 }
 
@@ -98,3 +98,10 @@ export interface Categories { defaults: string[]; custom: { id: string; name: st
 
 export interface AppNotification { id: string; type: string; title: string; message: string; read: boolean; createdAt: string }
 export interface NotificationList { items: AppNotification[]; unreadCount: number }
+
+export interface RecurringItem {
+  id: string; kind: 'income' | 'expense'; name: string; amountPaise: number; dayOfMonth: number; source?: IncomeSource; category?: string;
+  paymentMethod: PaymentMethod; notes?: string; active: boolean; startMonth: string; lastHandledMonth?: string;
+  due: boolean; month: string; nextDueDate: string;
+}
+export interface RecurringList { items: RecurringItem[]; dueCount: number }

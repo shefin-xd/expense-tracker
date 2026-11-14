@@ -14,7 +14,7 @@ const userSchema = new Schema(
     studentYear: { type: String, enum: STUDENT_YEARS, required: true },
     hostel: { type: String, trim: true, maxlength: 100 },
     preferences: {
-      theme: { type: String, enum: ['light', 'dark', 'system'], default: 'light' },
+      theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
       currency: { type: String, default: 'INR' },
       dateFormat: { type: String, default: 'DD/MM/YYYY' },
       timezone: { type: String, default: 'Asia/Kolkata' },
@@ -22,6 +22,7 @@ const userSchema = new Schema(
         feeDeadlines: { type: Boolean, default: true },
         budgetWarnings: { type: Boolean, default: true },
         repayments: { type: Boolean, default: true },
+        recurring: { type: Boolean, default: true },
       },
     },
   },

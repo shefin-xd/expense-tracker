@@ -37,6 +37,8 @@ describe('auth http (no database needed)', () => {
     const ok = await request(app).options('/api/auth/login').set('Origin', 'http://localhost:5173').set('Access-Control-Request-Method', 'POST');
     expect(ok.headers['access-control-allow-origin']).toBe('http://localhost:5173');
     expect(ok.headers['access-control-allow-credentials']).toBe('true');
+    const authApp = await request(app).options('/api/auth/login').set('Origin', 'http://localhost:5174').set('Access-Control-Request-Method', 'POST');
+    expect(authApp.headers['access-control-allow-origin']).toBe('http://localhost:5174'); // the separate sign-in app
     const other = await request(app).options('/api/auth/login').set('Origin', 'https://evil.example').set('Access-Control-Request-Method', 'POST');
     expect(other.headers['access-control-allow-origin']).not.toBe('https://evil.example');
   });

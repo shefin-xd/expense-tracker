@@ -3,66 +3,124 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Palette: ink #090B10, white, navy #142B52 plus neutral grays. One muted red is kept for errors and overdue states only. */
+/* iOS system colours. Light = grouped background with white cards; dark = true black with elevated #1C1C1E cards. */
 :root {
-  --bg: #ffffff;
-  --surface: #f7f8fa;
-  --border: #e5e7eb;
-  --border-strong: #cfd4dc;
-  --text: #090b10;
-  --muted: #667085;
-  --primary: #142b52;
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-solid: #ffffff;
+  --fill: rgba(120, 120, 128, 0.12);
+  --fill-strong: rgba(120, 120, 128, 0.2);
+  --text: #000000;
+  --muted: rgba(60, 60, 67, 0.6);
+  --faint: rgba(60, 60, 67, 0.3);
+  --border: rgba(60, 60, 67, 0.16);
+  --border-strong: rgba(60, 60, 67, 0.29);
+  --accent: #007aff;
+  --primary: #007aff;
   --primary-fg: #ffffff;
-  --accent: #142b52;
-  --danger: #b42318;
+  --success: #34c759;
+  --warning: #ff9500;
+  --danger: #ff3b30;
+  --purple: #af52de;
+  --teal: #30b0c7;
+  --indigo: #5856d6;
+  --pink: #ff2d55;
+  --yellow: #ffcc00;
+  --seg-selected: #ffffff;
+  --bar: rgba(249, 249, 249, 0.82);
+  --shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --sheet-shadow: 0 -8px 40px rgba(0, 0, 0, 0.18);
   color-scheme: light;
 }
 .dark {
-  --bg: #090b10;
-  --surface: #0e1219;
-  --border: #1d2430;
-  --border-strong: #2b3444;
-  --text: #f2f4f7;
-  --muted: #98a2b3;
-  --primary: #ffffff;
-  --primary-fg: #090b10;
-  --accent: #8fb0e6;
-  --danger: #f97066;
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-solid: #1c1c1e;
+  --fill: rgba(120, 120, 128, 0.24);
+  --fill-strong: rgba(120, 120, 128, 0.36);
+  --text: #ffffff;
+  --muted: rgba(235, 235, 245, 0.6);
+  --faint: rgba(235, 235, 245, 0.3);
+  --border: rgba(84, 84, 88, 0.55);
+  --border-strong: rgba(84, 84, 88, 0.8);
+  --accent: #0a84ff;
+  --primary: #0a84ff;
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --danger: #ff453a;
+  --purple: #bf5af2;
+  --teal: #40cbe0;
+  --indigo: #5e5ce6;
+  --pink: #ff375f;
+  --yellow: #ffd60a;
+  --seg-selected: #636366;
+  --bar: rgba(29, 29, 31, 0.8);
+  --shadow: none;
+  --sheet-shadow: 0 -8px 40px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
 
 @theme inline {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter Variable", system-ui, "Segoe UI", sans-serif;
   --color-bg: var(--bg);
   --color-surface: var(--surface);
-  --color-border: var(--border);
-  --color-border-strong: var(--border-strong);
+  --color-fill: var(--fill);
+  --color-fill-strong: var(--fill-strong);
   --color-text: var(--text);
   --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
   --color-primary: var(--primary);
   --color-primary-fg: var(--primary-fg);
-  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-danger: var(--danger);
+  --color-purple: var(--purple);
+  --color-teal: var(--teal);
+  --color-indigo: var(--indigo);
+  --color-pink: var(--pink);
+  --color-bar: var(--bar);
   --color-navy: #142b52;
+  --shadow-card: var(--shadow);
+  --shadow-sheet: var(--sheet-shadow);
 }
 
-html { background: var(--bg); }
+html { background: var(--bg); -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-feature-settings: "cv11", "ss01";
+  font-feature-settings: "cv11";
   -webkit-font-smoothing: antialiased;
-  padding-bottom: env(safe-area-inset-bottom);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
 }
 * { border-color: var(--border); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-::selection { background: color-mix(in srgb, var(--accent) 25%, transparent); }
-@media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-}
-@keyframes cl-pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+button, [role="tab"], a { touch-action: manipulation; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; border-radius: 8px; }
+::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+input, select, textarea { font-size: 16px; } /* 16px stops iOS Safari from zooming the page when a field is focused */
+@media (min-width: 640px) { input, select, textarea { font-size: 15px; } }
+input[type="date"], input[type="month"] { min-height: 2.75rem; -webkit-appearance: none; appearance: none; }
+input[type="date"]::-webkit-date-and-time-value, input[type="month"]::-webkit-date-and-time-value { text-align: left; }
+
+/* iOS spring-like motion */
+@keyframes cl-sheet { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes cl-dialog { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes cl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cl-banner { from { opacity: 0; transform: translateY(-12px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes cl-pulse { 50% { opacity: 0.5; } }
-.cl-pop { animation: cl-pop 140ms ease-out; }
-.cl-skeleton { background: var(--surface); animation: cl-pulse 1.4s ease-in-out infinite; border-radius: 6px; }
+.cl-sheet { animation: cl-sheet 380ms cubic-bezier(0.32, 0.72, 0, 1); }
+.cl-dialog { animation: cl-dialog 220ms cubic-bezier(0.32, 0.72, 0, 1); }
+.cl-fade { animation: cl-fade 200ms ease-out; }
+.cl-banner { animation: cl-banner 320ms cubic-bezier(0.32, 0.72, 0, 1); }
+.cl-skeleton { background: var(--fill); animation: cl-pulse 1.4s ease-in-out infinite; border-radius: 10px; }
+@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
+/* translucent bars, like iOS navigation and tab bars */
+.cl-bar { background: var(--bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); }
+.cl-scroll-x { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.cl-scroll-x::-webkit-scrollbar { display: none; }

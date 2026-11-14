@@ -24,7 +24,7 @@ function History({ loan, direction, onClose }: { loan: Loan; direction: Directio
     <div className="space-y-4">
       <p className="text-sm text-muted">{loan.person}: <Money paise={loan.repaidPaise} /> settled of <Money paise={loan.amountPaise} /></p>
       {loan.repayments.length ? (
-        <ul className="divide-y rounded-md border">
+        <ul className="divide-y overflow-hidden rounded-2xl bg-surface shadow-card">
           {loan.repayments.map((r) => (
             <li key={r.id} className="flex items-center gap-2 py-2 pl-3 pr-1.5">
               <div className="min-w-0 flex-1"><p className="text-sm font-medium"><Money paise={r.amountPaise} /></p><p className="truncate text-[13px] text-muted">{formatDate(r.date, fmt)}{r.notes ? ` · ${r.notes}` : ''}</p></div>
@@ -32,7 +32,7 @@ function History({ loan, direction, onClose }: { loan: Loan; direction: Directio
             </li>
           ))}
         </ul>
-      ) : <p className="rounded-md border border-dashed px-4 py-6 text-center text-[13px] text-muted">No repayments yet.</p>}
+      ) : <p className="rounded-xl bg-fill px-4 py-6 text-center text-[13px] text-muted">No repayments yet.</p>}
       <div className="flex justify-end"><Button variant="secondary" onClick={onClose}>Close</Button></div>
       <ConfirmDialog open={!!removing} title="Remove this repayment?" message="Your balance and the amount still outstanding will be restored." confirmLabel="Remove repayment" onConfirm={() => del.mutateAsync(removing!)} onClose={() => setRemoving(null)} />
     </div>
@@ -61,7 +61,7 @@ export default function BorrowLendPage() {
         <Segmented label="Lent or borrowed" value={direction} onChange={(v) => { setDirection(v); setStatus(''); setPage(1); }} options={[{ value: 'lending', label: 'Money I lent' }, { value: 'borrowing', label: 'Money I borrowed' }]} />
         <FilterSelect label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">Any status</option><option value="pending">Pending</option><option value="partially_settled">Partially settled</option><option value="overdue">Overdue</option><option value="settled">Settled</option></FilterSelect>
       </div>
-      <dl className="mb-6 grid grid-cols-3 gap-4 rounded-md border p-4">
+      <dl className="mb-6 grid grid-cols-3 gap-4 rounded-2xl bg-surface p-4 shadow-card">
         <Stat label={lent ? 'Total lent' : 'Total borrowed'} value={<Money paise={t?.totalPaise ?? 0} decimals={false} />} />
         <Stat label={lent ? 'Paid back' : 'Repaid'} value={<Money paise={t?.repaidPaise ?? 0} decimals={false} />} />
         <Stat label={lent ? 'Friends still owe you' : 'You still owe'} value={<Money paise={t?.outstandingPaise ?? 0} decimals={false} />} />
@@ -71,7 +71,7 @@ export default function BorrowLendPage() {
         : q.data.items.length ? (
           <ul className="space-y-3">
             {q.data.items.map((l) => (
-              <li key={l.id} className="rounded-md border p-4">
+              <li key={l.id} className="rounded-2xl bg-surface p-4 shadow-card">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{l.person}</p>
@@ -79,7 +79,7 @@ export default function BorrowLendPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-1"><StatusBadge status={l.status} /><RowActions name={l.person} onEdit={() => setModal({ kind: 'edit', loan: l })} onDelete={() => setModal({ kind: 'delete', loan: l })} /></div>
                 </div>
-                <div className="mt-4"><ProgressBar percent={Math.floor((l.repaidPaise * 100) / l.amountPaise)} level={l.status === 'overdue' ? 'over' : 'ok'} label={`${l.person} settled`} /></div>
+                <div className="mt-4"><ProgressBar percent={Math.floor((l.repaidPaise * 100) / l.amountPaise)} level={l.status === 'settled' ? 'done' : l.status === 'overdue' ? 'over' : 'ok'} label={`${l.person} settled`} /></div>
                 <div className="mt-2 flex flex-wrap justify-between gap-x-4 text-[13px] text-muted">
                   <span><Money paise={l.repaidPaise} /> of <Money paise={l.amountPaise} /></span>
                   <span className="font-medium text-text">{l.remainingPaise > 0 ? <><Money paise={l.remainingPaise} /> left</> : 'Settled'}</span>
